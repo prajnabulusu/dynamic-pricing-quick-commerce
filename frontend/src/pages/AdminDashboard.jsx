@@ -4,10 +4,14 @@ import {
   getNearExpiry,
   getRedistribution,
   getRescueRouting,
+  getPriceHistory,
+  getPriceSeries,
+  getViewSeries,
   getRecentOrders,
   getAllPrices,
   simulateSpike,
 } from "../api";
+import { useRef } from "react";
 import axios from "axios";
 
 const api = axios.create({ baseURL: "http://localhost:8000", timeout: 10000 });
@@ -95,7 +99,7 @@ function WeatherIcon({ weather }) {
   return <span className="text-xs font-semibold uppercase tracking-[0.24em] opacity-70">{icons[weather] || "Sky"}</span>;
 }
 
-function SpikeSimulator({ products, theme }) {
+function SpikeSimulator({ products, theme, onSimulated }) {
   const isDark = theme === "dark";
   const [selectedId, setSelectedId] = useState("");
   const [count, setCount] = useState(20);
@@ -109,6 +113,7 @@ function SpikeSimulator({ products, theme }) {
     try {
       const { data } = await simulateSpike(Number(selectedId), count);
       setResult({ success: true, msg: data.message });
+      if (onSimulated) onSimulated(Number(selectedId), data);
     } catch (e) {
       setResult({ success: false, msg: e.response?.data?.detail || "Failed" });
     } finally {
@@ -229,6 +234,274 @@ function EmptyState({ message, theme }) {
   return <p className={cx("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>{message}</p>;
 }
 
+function InteractiveSeriesChart({
+  title,
+  data,
+  metricKey,
+  type,
+  color,
+  unit,
+  xLabel,
+  yLabel,
+  theme,
+}) {
+  const isDark = theme === "dark";
+  const svgRef = useRef(null);
+  const [hoverIndex, setHoverIndex] = useState(null);
+  const width = 760;
+  const height = 260;
+  const padLeft = 58;
+  const padRight = 16;
+  const padTop = 20;
+  const padBottom = 46;
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+
+  if (!data || data.length === 0) {
+    return (
+      <div className={cx("rounded-2xl border px-4 py-4 text-sm", isDark ? "border-white/10 bg-slate-900/70 text-slate-400" : "border-slate-100 bg-slate-50 text-slate-500")}>
+        No chart points yet.
+      </div>
+    );
+  }
+
+  const values = data.map((p) => Number(p[metricKey] || 0));
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const range = Math.max(maxVal - minVal, 0.0001);
+
+  const points = data.map((point, idx) => {
+    const x = padLeft + (data.length > 1 ? (idx / (data.length - 1)) * chartW : chartW / 2);
+    const y = padTop + (1 - (Number(point[metricKey] || 0) - minVal) / range) * chartH;
+    return { x, y, point };
+  });
+
+  const linePath = points.map((pt, idx) => `${idx === 0 ? "M" : "L"} ${pt.x} ${pt.y}`).join(" ");
+  const areaPath = `${linePath} L ${padLeft + chartW} ${padTop + chartH} L ${padLeft} ${padTop + chartH} Z`;
+  const active = hoverIndex != null ? points[hoverIndex] : points[points.length - 1];
+
+  const onMove = (event) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || data.length === 0) return;
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left - padLeft) / chartW));
+    const idx = Math.round(ratio * (data.length - 1));
+    setHoverIndex(Math.max(0, Math.min(data.length - 1, idx)));
+  };
+
+  const currentVal = Number(active.point[metricKey] || 0);
+  const display = unit === "%" ? `${(currentVal * 100).toFixed(1)}%` : `${unit}${currentVal.toFixed(2)}`;
+  const firstTs = data.length ? new Date(data[0].timestamp).toLocaleTimeString() : "";
+  const lastTs = data.length ? new Date(data[data.length - 1].timestamp).toLocaleTimeString() : "";
+  const yMinLabel = unit === "%" ? `${(minVal * 100).toFixed(0)}%` : `${unit}${minVal.toFixed(2)}`;
+  const yMaxLabel = unit === "%" ? `${(maxVal * 100).toFixed(0)}%` : `${unit}${maxVal.toFixed(2)}`;
+
+  return (
+    <div className={cx("rounded-2xl border p-4", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50/80")}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{title}</p>
+        <p className={cx("text-sm font-bold", isDark ? "text-cyan-200" : "text-cyan-700")}>{display}</p>
+      </div>
+      <div className="relative overflow-hidden rounded-xl">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-[220px] w-full cursor-crosshair"
+          onMouseMove={onMove}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
+          {[0, 1, 2, 3, 4].map((i) => {
+            const gy = padTop + (i / 4) * chartH;
+            return <line key={i} x1={padLeft} y1={gy} x2={padLeft + chartW} y2={gy} stroke={isDark ? "rgba(148,163,184,0.20)" : "rgba(148,163,184,0.25)"} strokeWidth="1" />;
+          })}
+          <line x1={padLeft} y1={padTop + chartH} x2={padLeft + chartW} y2={padTop + chartH} stroke={isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"} strokeWidth="1" />
+          <line x1={padLeft} y1={padTop} x2={padLeft} y2={padTop + chartH} stroke={isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"} strokeWidth="1" />
+          {type === "area" && <path d={areaPath} fill={isDark ? "rgba(34,211,238,0.20)" : "rgba(6,182,212,0.20)"} />}
+          {type !== "bar" && <path d={linePath} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />}
+          {type === "bar" && points.map((pt, idx) => (
+            <rect key={idx} x={pt.x - 3} y={pt.y} width="6" height={padTop + chartH - pt.y} rx="2" fill={color} opacity="0.85" />
+          ))}
+          {active && (
+            <>
+              <line x1={active.x} y1={padTop} x2={active.x} y2={padTop + chartH} stroke={isDark ? "rgba(255,255,255,0.30)" : "rgba(15,23,42,0.20)"} strokeDasharray="4 4" />
+              <circle cx={active.x} cy={active.y} r="5" fill={color} />
+            </>
+          )}
+          <text x={width / 2} y={height - 10} textAnchor="middle" fontSize="11" fill={isDark ? "#94a3b8" : "#64748b"}>
+            {xLabel}
+          </text>
+          <text x={14} y={height / 2} textAnchor="middle" fontSize="11" fill={isDark ? "#94a3b8" : "#64748b"} transform={`rotate(-90 14 ${height / 2})`}>
+            {yLabel}
+          </text>
+          <text x={padLeft - 6} y={padTop + 10} textAnchor="end" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            {yMaxLabel}
+          </text>
+          <text x={padLeft - 6} y={padTop + chartH - 2} textAnchor="end" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            {yMinLabel}
+          </text>
+          <text x={padLeft} y={height - 24} textAnchor="start" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            {firstTs}
+          </text>
+          <text x={padLeft + chartW} y={height - 24} textAnchor="end" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            {lastTs}
+          </text>
+        </svg>
+        {active && (
+          <div className={cx("pointer-events-none absolute right-3 top-3 rounded-lg px-2 py-1 text-xs", isDark ? "bg-slate-800/90 text-slate-100" : "bg-white/95 text-slate-700 shadow")}>
+            {new Date(active.point.timestamp).toLocaleTimeString()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LiveProductDrawer({ product, history, series, demandSeries, loading, onClose, theme }) {
+  const isDark = theme === "dark";
+  const [activeGraph, setActiveGraph] = useState("price_tape");
+
+  const merged = (series || []).map((s, idx, arr) => {
+    const price = Number(s.recommended_price || 0);
+    const prevPrice = idx > 0 ? Number(arr[idx - 1].recommended_price || 0) : price;
+    const priceChangePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+    return {
+      timestamp: s.timestamp,
+      price,
+      demand: Number(s.demand_score || 0),
+      expiry: Number(s.expiry_factor || 0),
+      stock: Number(s.stock_factor || 0),
+      price_change_pct: priceChangePct,
+      volatility: Math.abs(priceChangePct),
+      stress: Math.max(0, Number(s.demand_score || 0) * 0.65 + Number(s.expiry_factor || 0) * 0.35 - Number(s.stock_factor || 0) * 0.25),
+    };
+  });
+
+  const chartData = merged.slice(-140);
+
+  const demandChartData = (demandSeries || []).map((d) => ({
+    timestamp: d.timestamp,
+    intensity: Number(d.intensity || 0),
+    views: Number(d.views || 0),
+  }));
+
+  const graphMap = {
+    price_tape: { label: "Price Tape", key: "price", type: "line", color: "#22d3ee", unit: "Rs. ", yLabel: "Price (Rupees)" },
+    demand_pulse: { label: "Model Demand", key: "demand", type: "area", color: "#fb923c", unit: "%", yLabel: "Demand Score (%)" },
+    traffic_pulse: { label: "Traffic Pulse", key: "intensity", type: "bar", color: "#38bdf8", unit: "%", yLabel: "View Intensity (%)" },
+    momentum_bars: { label: "Momentum Bars", key: "price_change_pct", type: "bar", color: "#a78bfa", unit: "%", yLabel: "Price Change (%)" },
+    volatility_wave: { label: "Volatility Wave", key: "volatility", type: "area", color: "#f43f5e", unit: "%", yLabel: "Volatility (%)" },
+    risk_index: { label: "Risk Index", key: "stress", type: "line", color: "#34d399", unit: "%", yLabel: "Stress Score (%)" },
+  };
+
+  const latestReason = history && history.length > 0 ? history[0].change_reason : "";
+  const latestDemandSource = activeGraph === "traffic_pulse" && demandChartData.length ? demandChartData : chartData;
+  const latestDemand = latestDemandSource.length
+    ? Number(
+      (activeGraph === "traffic_pulse"
+        ? latestDemandSource[latestDemandSource.length - 1].intensity
+        : latestDemandSource[latestDemandSource.length - 1].demand) || 0
+    )
+    : 0;
+  const demandLabel = latestDemand >= 0.75 ? "High demand" : latestDemand >= 0.45 ? "Rising demand" : "Normal demand";
+  const selectedData =
+    activeGraph === "traffic_pulse" && demandChartData.length
+      ? demandChartData.slice(-80)
+      : activeGraph === "demand_pulse"
+        ? chartData.slice(-90)
+        : chartData.slice(-120);
+
+  return (
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-slate-900/45" onClick={onClose} />
+      <aside className={cx("absolute right-0 top-0 h-full w-full max-w-4xl overflow-y-auto border-l p-5", isDark ? "border-white/10 bg-slate-950/95" : "border-slate-200 bg-white")}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className={cx("text-xs uppercase tracking-[0.18em]", isDark ? "text-slate-400" : "text-slate-500")}>Live Product Monitor</p>
+            <h3 className={cx("mt-1 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>{product?.name}</h3>
+            <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{product?.price_reason || latestReason || "Waiting for first change..."}</p>
+            <p className={cx("mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold", latestDemand >= 0.75 ? (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700") : latestDemand >= 0.45 ? (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700") : (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"))}>
+              {demandLabel} ({(latestDemand * 100).toFixed(0)}%)
+            </p>
+          </div>
+          <button onClick={onClose} className={cx("rounded-xl px-3 py-2 text-xs font-semibold", isDark ? "bg-slate-800 text-slate-100" : "bg-slate-100 text-slate-700")}>Close</button>
+        </div>
+
+        <div className="mb-3 flex flex-wrap gap-2">
+          {Object.entries(graphMap).map(([id, g]) => (
+            <button
+              key={id}
+              onClick={() => setActiveGraph(id)}
+              className={cx(
+                "rounded-xl px-3 py-1.5 text-xs font-semibold",
+                activeGraph === id
+                  ? isDark ? "bg-violet-400 text-slate-950" : "bg-violet-700 text-white"
+                  : isDark ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-700"
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className={cx("rounded-2xl border px-4 py-6 text-sm", isDark ? "border-white/10 bg-slate-900/70 text-slate-300" : "border-slate-100 bg-slate-50 text-slate-600")}>
+            Loading live chart...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <InteractiveSeriesChart
+              title={`${graphMap[activeGraph].label} trend (live)`}
+              data={selectedData}
+              metricKey={graphMap[activeGraph].key}
+              type={graphMap[activeGraph].type}
+              color={graphMap[activeGraph].color}
+              unit={graphMap[activeGraph].unit}
+              xLabel="Time (event timeline)"
+              yLabel={graphMap[activeGraph].yLabel}
+              theme={theme}
+            />
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function ExpiryBucketsChart({ items, theme }) {
+  const isDark = theme === "dark";
+  const buckets = { "0d": 0, "1d": 0, "2d": 0, "3d": 0, "4d+": 0 };
+  items.forEach((item) => {
+    const d = Number(item.days_left);
+    if (d <= 0) buckets["0d"] += Number(item.quantity || 0);
+    else if (d === 1) buckets["1d"] += Number(item.quantity || 0);
+    else if (d === 2) buckets["2d"] += Number(item.quantity || 0);
+    else if (d === 3) buckets["3d"] += Number(item.quantity || 0);
+    else buckets["4d+"] += Number(item.quantity || 0);
+  });
+
+  const data = Object.entries(buckets).map(([label, qty]) => ({ label, qty }));
+  const max = Math.max(...data.map((d) => d.qty), 1);
+
+  return (
+    <div className={cx("rounded-2xl border p-4", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50/80")}>
+      <p className={cx("mb-4 text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>Expiry Pressure (Qty by days left)</p>
+      <div className="space-y-2">
+        {data.map((d) => (
+          <div key={d.label} className="grid grid-cols-[44px_1fr_56px] items-center gap-3">
+            <span className={cx("text-xs font-semibold", isDark ? "text-slate-400" : "text-slate-500")}>{d.label}</span>
+            <div className={cx("h-3 overflow-hidden rounded-full", isDark ? "bg-slate-800" : "bg-slate-200")}>
+              <div
+                className={cx("h-full rounded-full", d.label === "0d" ? "bg-rose-400" : d.label === "1d" ? "bg-orange-400" : d.label === "2d" ? "bg-amber-400" : "bg-emerald-400")}
+                style={{ width: `${(d.qty / max) * 100}%` }}
+              />
+            </div>
+            <span className={cx("text-right text-xs font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>{d.qty}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard({ theme }) {
   const isDark = theme === "dark";
   const [stats, setStats] = useState(null);
@@ -244,9 +517,15 @@ export default function AdminDashboard({ theme }) {
   const [coldAlerts, setColdAlerts] = useState([]);
   const [impact, setImpact] = useState(null);
   const [perishLife, setPerishLife] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedHistory, setSelectedHistory] = useState([]);
+  const [selectedSeries, setSelectedSeries] = useState([]);
+  const [selectedDemandSeries, setSelectedDemandSeries] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const pricesSigRef = useRef("");
 
   const fetchAll = useCallback(async () => {
     const [s, e, r, rr, o, p, w, ca, si, pl] = await Promise.allSettled([
@@ -272,7 +551,16 @@ export default function AdminDashboard({ theme }) {
       setRescueAnalytics(rr.value.data.analytics || null);
     }
     if (o.status === "fulfilled") setOrders(o.value.data);
-    if (p.status === "fulfilled") setPrices(p.value.data);
+    if (p.status === "fulfilled") {
+      const nextPrices = p.value.data || [];
+      const nextSig = nextPrices
+        .map((item) => `${item.product_id}:${Number(item.recommended_price).toFixed(2)}:${Number(item.demand_score).toFixed(4)}`)
+        .join("|");
+      if (nextSig !== pricesSigRef.current) {
+        pricesSigRef.current = nextSig;
+        setPrices(nextPrices);
+      }
+    }
     if (w.status === "fulfilled") setWeather(w.value.data);
     if (ca.status === "fulfilled") setColdAlerts(ca.value.data);
     if (si.status === "fulfilled") setImpact(si.value.data);
@@ -282,10 +570,49 @@ export default function AdminDashboard({ theme }) {
   }, []);
 
   useEffect(() => {
-    fetchAll();
-    const id = setInterval(fetchAll, 8000);
-    return () => clearInterval(id);
+    const boot = setTimeout(() => {
+      void fetchAll();
+    }, 0);
+    const id = setInterval(fetchAll, 15000);
+    return () => {
+      clearTimeout(boot);
+      clearInterval(id);
+    };
   }, [fetchAll]);
+
+  const fetchProductChart = useCallback(async (productId, options = {}) => {
+    const { silent = false } = options;
+    if (!productId) return;
+    if (!silent) setChartLoading(true);
+    const [h, s, d] = await Promise.allSettled([
+      getPriceHistory(productId),
+      getPriceSeries(productId, 240),
+      getViewSeries(productId, 30, 15),
+    ]);
+
+    if (h.status === "fulfilled") {
+      setSelectedHistory(h.value.data || []);
+    }
+    if (s.status === "fulfilled") {
+      setSelectedSeries(s.value.data || []);
+    }
+    if (d.status === "fulfilled") {
+      setSelectedDemandSeries(d.value.data || []);
+    }
+    if (!silent) setChartLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedProduct?.product_id) return;
+    const boot = setTimeout(() => {
+      void fetchProductChart(selectedProduct.product_id, { silent: false });
+    }, 0);
+    const id = setInterval(() => fetchProductChart(selectedProduct.product_id, { silent: true }), 1200);
+    return () => {
+      clearTimeout(boot);
+      clearInterval(id);
+    };
+  }, [selectedProduct, fetchProductChart]);
 
   const tabs = [
     { id: "overview", label: "Overview" },
@@ -331,7 +658,7 @@ export default function AdminDashboard({ theme }) {
           <div className="grid grid-cols-2 gap-3">
             <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
               <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Refresh</p>
-              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>8 sec</p>
+              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>15 sec</p>
             </div>
             <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
               <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Updated</p>
@@ -483,6 +810,9 @@ export default function AdminDashboard({ theme }) {
       {activeTab === "pricing" && (
         <div className="mt-6">
           <Section title="Live pricing - all products" theme={theme}>
+            <p className={cx("mb-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
+              Click any product row to open a live trading-style chart.
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
@@ -499,7 +829,14 @@ export default function AdminDashboard({ theme }) {
                     const up = product.recommended_price > product.base_price;
                     const down = product.recommended_price < product.base_price;
                     return (
-                      <tr key={product.product_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                      <tr
+                        key={product.product_id}
+                        onClick={() => setSelectedProduct(product)}
+                        className={cx(
+                          "cursor-pointer border-b last:border-0",
+                          isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70"
+                        )}
+                      >
                         <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{product.name}</td>
                         <td className={cx("py-3 text-right", isDark ? "text-slate-400" : "text-slate-400")}>Rs. {product.base_price.toFixed(2)}</td>
                         <td className="py-3 text-right">
@@ -527,7 +864,8 @@ export default function AdminDashboard({ theme }) {
       )}
 
       {activeTab === "perishable" && (
-        <div className="mt-6">
+        <div className="mt-6 space-y-6">
+          <ExpiryBucketsChart items={expiry} theme={theme} />
           <Section title="Perishable batch lifecycle" theme={theme}>
             {perishLife.length === 0 ? <EmptyState message="No perishable batch data yet." theme={theme} /> : <PerishableLifecycle items={perishLife} theme={theme} />}
           </Section>
@@ -831,7 +1169,15 @@ export default function AdminDashboard({ theme }) {
       {activeTab === "simulator" && (
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <Section title="Demand spike simulator" theme={theme}>
-            <SpikeSimulator products={prices.map((product) => ({ product_id: product.product_id, name: product.name }))} theme={theme} />
+            <SpikeSimulator
+              products={prices.map((product) => ({ product_id: product.product_id, name: product.name }))}
+              theme={theme}
+              onSimulated={(productId) => {
+                setActiveTab("pricing");
+                const selected = prices.find((p) => Number(p.product_id) === Number(productId));
+                if (selected) setSelectedProduct(selected);
+              }}
+            />
           </Section>
           <div className={cx("rounded-[30px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
             <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>How it works</p>
@@ -841,9 +1187,18 @@ export default function AdminDashboard({ theme }) {
           </div>
         </div>
       )}
+
+      {selectedProduct && (
+        <LiveProductDrawer
+          product={selectedProduct}
+          history={selectedHistory}
+          series={selectedSeries}
+          demandSeries={selectedDemandSeries}
+          loading={chartLoading}
+          onClose={() => setSelectedProduct(null)}
+          theme={theme}
+        />
+      )}
     </div>
   );
 }
-
-
-

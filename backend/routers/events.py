@@ -4,6 +4,7 @@ and publishes them to the Kafka 'demand_events' topic.
 The demand_consumer picks these up and updates pricing intensity.
 """
 import sys, os, json, uuid
+from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,11 +15,13 @@ from typing import Optional
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from backend.models.database import get_db
+from ml.pricing_engine import PricingEngine
 from config import settings
 
 router = APIRouter(prefix="/events", tags=["Demand Events"])
 
 _producer = None
+_pricing_engine = None
 
 def get_producer():
     global _producer
@@ -34,6 +37,72 @@ def get_producer():
         except NoBrokersAvailable:
             raise HTTPException(status_code=503, detail="Kafka unavailable")
     return _producer
+
+
+def get_pricing_engine():
+    global _pricing_engine
+    if _pricing_engine is None:
+        _pricing_engine = PricingEngine()
+    return _pricing_engine
+
+
+def _save_simulator_price(db: Session, price_data: dict, reason_suffix: str, created_at: datetime | None = None):
+    old_row = db.execute(text("""
+        SELECT recommended_price
+        FROM pricing
+        WHERE product_id = :pid
+        ORDER BY created_at DESC
+        LIMIT 1;
+    """), {"pid": price_data["product_id"]}).fetchone()
+    old_price = float(old_row[0]) if old_row else float(price_data["base_price"])
+
+    warehouse_row = db.execute(text("""
+        SELECT warehouse_id
+        FROM inventory
+        WHERE product_id = :pid
+        ORDER BY warehouse_id
+        LIMIT 1;
+    """), {"pid": price_data["product_id"]}).fetchone()
+    warehouse_id = int(warehouse_row[0]) if warehouse_row else None
+
+    new_price = float(price_data["recommended_price"])
+    if abs(new_price - old_price) < 0.01:
+        new_price = round(old_price * 1.01, 2)
+
+    price_reason = f"{price_data.get('price_reason', 'Demand spike detected')}; {reason_suffix}"
+
+    db.execute(text("""
+        INSERT INTO pricing
+            (product_id, warehouse_id, recommended_price, base_price,
+             demand_score, stock_factor, expiry_factor, final_margin,
+             price_reason, created_at)
+        VALUES (:pid, :wid, :new_px, :base_px, :demand, :stock, :expiry, :margin, :reason, COALESCE(:created_at, NOW()));
+    """), {
+        "pid": price_data["product_id"],
+        "wid": warehouse_id,
+        "new_px": new_price,
+        "base_px": float(price_data["base_price"]),
+        "demand": float(price_data.get("demand_score", 0.0)),
+        "stock": float(price_data.get("stock_factor", 0.0)),
+        "expiry": float(price_data.get("expiry_factor", 0.0)),
+        "margin": float(price_data.get("final_margin", 0.0)),
+        "reason": price_reason,
+        "created_at": created_at,
+    })
+
+    db.execute(text("""
+        INSERT INTO price_history
+            (product_id, old_price, new_price, change_reason)
+        VALUES (:pid, :old_px, :new_px, :reason);
+    """), {
+        "pid": price_data["product_id"],
+        "old_px": old_price,
+        "new_px": new_price,
+        "reason": price_reason,
+    })
+
+    db.commit()
+    return old_price, new_price
 
 
 class DemandEventRequest(BaseModel):
@@ -198,6 +267,59 @@ def get_view_stats(product_id: int, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/stats-series/{product_id}")
+def get_view_stats_series(
+    product_id: int,
+    minutes: int = 30,
+    bucket_sec: int = 15,
+    db: Session = Depends(get_db),
+):
+    """
+    Demand intensity time series for charting.
+    Buckets view events and returns normalized intensity (0-1).
+    """
+    minutes = max(2, min(minutes, 180))
+    bucket_sec = max(5, min(bucket_sec, 120))
+
+    rows = db.execute(text("""
+        WITH buckets AS (
+            SELECT generate_series(
+                date_trunc('second', NOW() - make_interval(mins => :mins)),
+                date_trunc('second', NOW()),
+                make_interval(secs => :bucket_sec)
+            ) AS bucket_start
+        ),
+        events AS (
+            SELECT
+                to_timestamp(
+                    floor(extract(epoch FROM created_at) / :bucket_sec) * :bucket_sec
+                ) AS bucket_start,
+                COUNT(*) FILTER (WHERE event_type = 'view') AS view_count
+            FROM demand_events
+            WHERE product_id = :pid
+              AND created_at >= NOW() - make_interval(mins => :mins)
+            GROUP BY 1
+        )
+        SELECT
+            b.bucket_start,
+            COALESCE(e.view_count, 0) AS views
+        FROM buckets b
+        LEFT JOIN events e ON e.bucket_start = b.bucket_start
+        ORDER BY b.bucket_start ASC;
+    """), {"pid": product_id, "mins": minutes, "bucket_sec": bucket_sec}).fetchall()
+
+    # Normalize using a practical spike threshold so visual changes are obvious.
+    norm_base = 12.0
+    return [
+        {
+            "timestamp": r.bucket_start,
+            "views": int(r.views),
+            "intensity": round(min(float(r.views) / norm_base, 1.0), 4),
+        }
+        for r in rows
+    ]
+
+
 @router.get("/spike-simulator/{product_id}")
 def simulate_demand_spike(
     product_id: int,
@@ -223,9 +345,62 @@ def simulate_demand_spike(
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
+    for _ in range(count):
+        db.execute(text("""
+            INSERT INTO demand_events
+                (product_id, event_type, session_id, location_id)
+            VALUES (:pid, 'view', :sid, 1);
+        """), {"pid": product_id, "sid": str(uuid.uuid4())[:16]})
+    db.commit()
+
+    simulator_old = None
+    simulator_new = None
+    repricing_ticks = 0
+    try:
+        engine = get_pricing_engine()
+        ticks = max(6, min(16, count // 2))
+        start_ts = datetime.now() - timedelta(seconds=ticks)
+        for i in range(ticks):
+            phase = i / max(ticks - 1, 1)
+            wave = 1.0 + (0.6 * phase if phase <= 0.5 else 0.6 * (1 - phase))
+            jitter = ((i % 3) - 1) * 0.04
+            multiplier = max(0.5, min(2.5, (1.0 + count / 25.0) * wave + jitter))
+            event_ts = start_ts + timedelta(seconds=i)
+            synthetic_event = {
+                "timestamp": event_ts.isoformat(),
+                "demand_multiplier": multiplier,
+                "items": [{"product_id": product_id, "quantity": 1 + (i % 2)}],
+            }
+            price_data = engine.compute_price(product_id, synthetic_event)
+            if not price_data:
+                continue
+            model_demand = float(price_data.get("demand_score", 0.0))
+            spike_target = min(0.99, 0.45 + (0.45 * wave) + min(0.12, count / 250.0))
+            adjusted_demand = max(0.05, min(0.99, 0.35 * model_demand + 0.65 * spike_target))
+            price_data["demand_score"] = adjusted_demand
+
+            # Reflect demand spike into displayed price series for clearer visibility.
+            demand_lift = 1.0 + max(0.0, adjusted_demand - model_demand) * 0.45
+            price_data["recommended_price"] = round(float(price_data["recommended_price"]) * demand_lift, 2)
+            old_px, new_px = _save_simulator_price(
+                db,
+                price_data,
+                f"simulator spike: {count} view events (tick {i+1}/{ticks})",
+                created_at=event_ts,
+            )
+            if simulator_old is None:
+                simulator_old = old_px
+            simulator_new = new_px
+            repricing_ticks += 1
+    except Exception:
+        db.rollback()
+
     return {
         "status":     "spike simulated",
         "product_id": product_id,
         "events_sent": count,
-        "message":    f"Sent {count} view events. Watch the price update!",
+        "repricing_ticks": repricing_ticks,
+        "old_price": simulator_old,
+        "new_price": simulator_new,
+        "message":    f"Sent {count} view events and wrote {repricing_ticks} repricing ticks.",
     }

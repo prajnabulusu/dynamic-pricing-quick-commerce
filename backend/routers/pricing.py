@@ -249,6 +249,38 @@ def get_redistribution(db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/{product_id}/series", tags=["Pricing"])
+def get_product_live_series(product_id: int, limit: int = 80, db: Session = Depends(get_db)):
+    """
+    Time series for one product used by live chart panels.
+    Returns chronological points from pricing table.
+    """
+    rows = db.execute(text("""
+        SELECT
+            recommended_price,
+            demand_score,
+            expiry_factor,
+            stock_factor,
+            created_at
+        FROM pricing
+        WHERE product_id = :pid
+        ORDER BY created_at DESC
+        LIMIT :lim;
+    """), {"pid": product_id, "lim": limit}).fetchall()
+
+    points = list(reversed(rows))
+    return [
+        {
+            "timestamp": p.created_at,
+            "recommended_price": float(p.recommended_price or 0),
+            "demand_score": float(p.demand_score or 0),
+            "expiry_factor": float(p.expiry_factor or 0),
+            "stock_factor": float(p.stock_factor or 0),
+        }
+        for p in points
+    ]
+
+
 @dashboard_router.get("/animal-shelter-routing")
 def get_animal_shelter_routing(db: Session = Depends(get_db)):
     """

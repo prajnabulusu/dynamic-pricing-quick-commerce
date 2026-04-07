@@ -79,9 +79,10 @@ def extract_features():
     )
 
     # ── Stock features ────────────────────────────────────────────────────────
-    df["stock_ratio"] = (
-        df["stock_quantity"] / df["stock_quantity"].replace(0, 1)
-    ).clip(0, 1)
+    # Relative stock health: compare stock to 5x reorder baseline.
+    # This avoids a near-constant 1.0 feature and gives the model useful variance.
+    stock_baseline = (df["reorder_level"].replace(0, 1) * 5.0)
+    df["stock_ratio"] = (df["stock_quantity"] / stock_baseline).clip(0, 3)
     df["is_low_stock"] = (
         df["stock_quantity"] <= df["reorder_level"]
     ).astype(int)
