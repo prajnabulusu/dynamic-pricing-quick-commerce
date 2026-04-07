@@ -2,6 +2,7 @@
 import { getProducts, placeOrder, recordEvent, getViewStats } from "../api";
 
 const SESSION_ID = Math.random().toString(36).slice(2, 10);
+const EXPIRY_ALERT_CATEGORIES = new Set(["Fruits", "Vegetables", "Dairy"]);
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -71,6 +72,16 @@ function getCategoryTheme(categoryName) {
     hash = (hash + normalized.charCodeAt(i)) % CATEGORY_THEMES.length;
   }
   return CATEGORY_THEMES[hash];
+}
+
+function getExpiryPriority(product) {
+  const reason = String(product.price_reason || "").toLowerCase();
+  if (reason.includes("expired")) return 0;
+  if (reason.includes("tomorrow")) return 1;
+  if (reason.includes("2 day")) return 2;
+  if (reason.includes("3 day")) return 3;
+  if (reason.includes("expir")) return 4;
+  return 99;
 }
 
 function ExpiryBadge({ product, theme }) {
@@ -616,13 +627,62 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
   const [filter, setFilter] = useState("All");
   const [lastRefresh, setLastRefresh] = useState(null);
   const [clickCounts, setClickCounts] = useState({});
+  const priceDropNotifiedRef = useRef({});
+  const showToastRef = useRef(showToast);
+  const addToCartRef = useRef(addToCart);
+
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
+  useEffect(() => {
+    addToCartRef.current = addToCart;
+  }, [addToCart]);
 
   const cartIds = new Set(cart.map((item) => item.product.product_id));
 
   const fetchProducts = useCallback(async () => {
     try {
       const { data } = await getProducts();
-      setProducts(data);
+      setProducts((previous) => {
+        const previousById = new Map(previous.map((product) => [product.product_id, product]));
+        const dropAlerts = [];
+
+        for (const product of data) {
+          const older = previousById.get(product.product_id);
+          if (!older) continue;
+
+          const dropped = Number(product.current_price) < Number(older.current_price);
+          if (!dropped) continue;
+
+          const reason = (product.price_reason || "").toLowerCase();
+          const nearExpiryDrop = reason.includes("expir") || reason.includes("expired");
+          if (!nearExpiryDrop) continue;
+
+          const categoryName = String(product.category_name || "").trim();
+          const eligiblePerishable = product.is_perishable && EXPIRY_ALERT_CATEGORIES.has(categoryName);
+          if (!eligiblePerishable) continue;
+
+          const alertKey = `${product.product_id}:${Number(product.current_price).toFixed(2)}`;
+          if (priceDropNotifiedRef.current[alertKey]) continue;
+          priceDropNotifiedRef.current[alertKey] = true;
+
+          dropAlerts.push(product);
+        }
+
+        for (const droppedProduct of dropAlerts.slice(0, 2)) {
+          showToastRef.current?.(
+            `Price dropped: ${droppedProduct.name} is now Rs. ${Number(droppedProduct.current_price).toFixed(2)} (near expiry)`,
+            "success",
+            {
+              actionLabel: "Add to cart",
+              onAction: () => addToCartRef.current?.(droppedProduct),
+            }
+          );
+        }
+
+        return data;
+      });
       setError(null);
       setLastRefresh(new Date());
     } catch {
@@ -652,6 +712,9 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
       items: filtered.filter((product) => product.category_name === category),
     }))
     .filter((group) => group.items.length > 0);
+  const expiringSoonProducts = [...products]
+    .filter((product) => String(product.price_reason || "").toLowerCase().includes("expir"))
+    .sort((a, b) => getExpiryPriority(a) - getExpiryPriority(b));
   const totalClicks = Object.values(clickCounts).reduce((sum, value) => sum + value, 0);
 
   if (loading) {
@@ -749,25 +812,101 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             </div>
           </section>
 
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setFilter(category)}
-                className={cx(
-                  "rounded-full px-4 py-2 text-xs font-semibold transition-all",
-                  filter === category
-                    ? isDark
-                      ? "bg-cyan-400 text-slate-950"
-                      : "bg-slate-900 text-white"
-                    : isDark
-                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
-                      : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
-                )}
-              >
-                {category}
-              </button>
-            ))}
+          <section className={cx(
+            "rounded-[30px] border p-4 sm:p-5",
+            isDark
+              ? "border-orange-300/20 bg-gradient-to-br from-orange-400/10 via-white/[0.03] to-transparent"
+              : "border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-orange-50/40"
+          )}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className={cx(
+                  "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em]",
+                  isDark ? "bg-orange-400/15 text-orange-200 ring-1 ring-orange-300/25" : "bg-orange-100 text-orange-700 ring-1 ring-orange-200"
+                )}>
+                  Expiring Soon
+                </p>
+                <p className={cx("mt-2 text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
+                  Fast-moving markdowns across perishables and short-shelf categories.
+                </p>
+              </div>
+              <span className={cx("text-xs font-semibold", isDark ? "text-orange-200" : "text-orange-700")}>
+                {expiringSoonProducts.length} item{expiringSoonProducts.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            {expiringSoonProducts.length > 0 ? (
+              <div className="overflow-x-auto pb-1">
+                <div className="flex w-max min-w-full flex-nowrap gap-2">
+                  {expiringSoonProducts.map((product) => (
+                    <div
+                      key={`expiring-item-${product.product_id}`}
+                      className={cx(
+                        "flex shrink-0 items-center gap-3 rounded-xl border px-3 py-2",
+                        isDark ? "border-white/8 bg-white/[0.03]" : "border-slate-100 bg-slate-50/80"
+                      )}
+                    >
+                      <span className={cx(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                        isDark ? "bg-orange-400/12 text-orange-200 ring-1 ring-orange-300/20" : "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
+                      )}>
+                        {product.category_name}
+                      </span>
+                      <p className={cx("max-w-[180px] truncate text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>
+                        {product.name}
+                      </p>
+                      <p className={cx("text-xs", isDark ? "text-slate-300" : "text-slate-600")}>
+                        Rs. {Number(product.current_price).toFixed(2)}
+                      </p>
+                      <button
+                        onClick={() => addToCart(product)}
+                        className={cx(
+                          "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                          isDark
+                            ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                            : "bg-slate-900 text-white hover:bg-slate-800"
+                        )}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className={cx(
+                "rounded-2xl border px-4 py-4 text-sm",
+                isDark ? "border-white/10 bg-white/[0.03] text-slate-300" : "border-slate-100 bg-white/80 text-slate-600"
+              )}>
+                No expiring products right now.
+              </div>
+            )}
+          </section>
+
+          <div className={cx(
+            "overflow-x-auto pb-1",
+            isDark ? "scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent" : ""
+          )}>
+            <div className="flex w-max min-w-full flex-nowrap gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setFilter(category)}
+                  className={cx(
+                    "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all",
+                    filter === category
+                      ? isDark
+                        ? "bg-cyan-400 text-slate-950"
+                        : "bg-slate-900 text-white"
+                      : isDark
+                        ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                        : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
+                  )}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-5">
