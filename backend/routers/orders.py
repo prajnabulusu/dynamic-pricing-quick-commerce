@@ -15,6 +15,7 @@ from config import settings
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 # Single producer instance shared across requests
+# adding comment to check if the feature branch is working
 _producer = None
 
 

@@ -1,3 +1,26 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  * {
+    @apply border-slate-200 dark:border-slate-800;
+  }
+
+  ::selection {
+    @apply bg-cyan-300/40 text-slate-950 dark:bg-cyan-400/30 dark:text-white;
+  }
+}
+
