@@ -22,6 +22,8 @@ export const getRecentOrders= ()     => api.get("/orders/recent");
 export const getDashboardStats    = () => api.get("/dashboard/stats");
 export const getNearExpiry        = () => api.get("/dashboard/near-expiry");
 export const getRedistribution    = () => api.get("/dashboard/redistribution");
+export const getAnimalShelterRouting = () => api.get("/dashboard/animal-shelter-routing");
+export const getRescueRouting     = () => api.get("/dashboard/rescue-routing");
 
 // ── Phase A: demand events ────────────────────────────────────────────────────
 export const recordEvent   = (body)          => api.post("/events/", body);

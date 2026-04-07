@@ -3,6 +3,7 @@ import {
   getDashboardStats,
   getNearExpiry,
   getRedistribution,
+  getRescueRouting,
   getRecentOrders,
   getAllPrices,
   simulateSpike,
@@ -30,11 +31,11 @@ function StatCard({ label, value, sub, accent, theme }) {
 
   return (
     <div className={cx(
-      "rounded-[26px] bg-gradient-to-br p-4 ring-1",
+      "min-w-0 rounded-[26px] bg-gradient-to-br p-4 ring-1",
       tones[accent] || tones.cyan
     )}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-75">{label}</p>
-      <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
+      <p className="mt-3 break-words text-[clamp(1.2rem,2.4vw,1.875rem)] font-black leading-tight tracking-tight">{value}</p>
       {sub && <p className="mt-2 text-xs opacity-70">{sub}</p>}
     </div>
   );
@@ -233,6 +234,10 @@ export default function AdminDashboard({ theme }) {
   const [stats, setStats] = useState(null);
   const [expiry, setExpiry] = useState([]);
   const [redistrib, setRedistrib] = useState([]);
+  const [rescueRouting, setRescueRouting] = useState([]);
+  const [rescueSummary, setRescueSummary] = useState(null);
+  const [rescueOnboarding, setRescueOnboarding] = useState([]);
+  const [rescueAnalytics, setRescueAnalytics] = useState(null);
   const [orders, setOrders] = useState([]);
   const [prices, setPrices] = useState([]);
   const [weather, setWeather] = useState([]);
@@ -244,10 +249,11 @@ export default function AdminDashboard({ theme }) {
   const [activeTab, setActiveTab] = useState("overview");
 
   const fetchAll = useCallback(async () => {
-    const [s, e, r, o, p, w, ca, si, pl] = await Promise.allSettled([
+    const [s, e, r, rr, o, p, w, ca, si, pl] = await Promise.allSettled([
       getDashboardStats(),
       getNearExpiry(),
       getRedistribution(),
+      getRescueRouting(),
       getRecentOrders(),
       getAllPrices(),
       getWeather(),
@@ -259,6 +265,12 @@ export default function AdminDashboard({ theme }) {
     if (s.status === "fulfilled") setStats(s.value.data);
     if (e.status === "fulfilled") setExpiry(e.value.data);
     if (r.status === "fulfilled") setRedistrib(r.value.data);
+    if (rr.status === "fulfilled") {
+      setRescueRouting(rr.value.data.routes || []);
+      setRescueSummary(rr.value.data.summary || null);
+      setRescueOnboarding(rr.value.data.onboarding || []);
+      setRescueAnalytics(rr.value.data.analytics || null);
+    }
     if (o.status === "fulfilled") setOrders(o.value.data);
     if (p.status === "fulfilled") setPrices(p.value.data);
     if (w.status === "fulfilled") setWeather(w.value.data);
@@ -271,7 +283,7 @@ export default function AdminDashboard({ theme }) {
 
   useEffect(() => {
     fetchAll();
-    const id = setInterval(fetchAll, 20000);
+    const id = setInterval(fetchAll, 8000);
     return () => clearInterval(id);
   }, [fetchAll]);
 
@@ -282,6 +294,7 @@ export default function AdminDashboard({ theme }) {
     { id: "weather", label: "Weather" },
     { id: "coldchain", label: "Cold Chain" },
     { id: "impact", label: "Impact" },
+    { id: "rescue", label: "Rescue Routing MVP" },
     { id: "simulator", label: "Simulator" },
   ];
 
@@ -318,7 +331,7 @@ export default function AdminDashboard({ theme }) {
           <div className="grid grid-cols-2 gap-3">
             <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
               <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Refresh</p>
-              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>20 sec</p>
+              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>8 sec</p>
             </div>
             <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
               <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Updated</p>
@@ -348,7 +361,7 @@ export default function AdminDashboard({ theme }) {
       </section>
 
       <div className={cx(
-        "mt-6 flex flex-wrap gap-2 rounded-[26px] border p-2",
+        "mt-6 flex gap-2 overflow-x-auto rounded-[26px] border p-2 whitespace-nowrap",
         isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/80"
       )}>
         {tabs.map((tab) => (
@@ -356,7 +369,7 @@ export default function AdminDashboard({ theme }) {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cx(
-              "rounded-2xl px-4 py-2 text-xs font-semibold transition-all",
+              "shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all",
               activeTab === tab.id
                 ? isDark ? "bg-cyan-400 text-slate-950" : "bg-slate-900 text-white"
                 : isDark ? "text-slate-300 hover:bg-white/[0.06]" : "text-slate-600 hover:bg-slate-100"
@@ -370,7 +383,7 @@ export default function AdminDashboard({ theme }) {
             )}
           </button>
         ))}
-        <button onClick={fetchAll} className={cx("ml-auto rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
+        <button onClick={fetchAll} className={cx("ml-auto shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
           Refresh now
         </button>
       </div>
@@ -621,6 +634,192 @@ export default function AdminDashboard({ theme }) {
                       <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{partner.units} units</p>
                       <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{partner.dispatches} dispatches</p>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+        </div>
+      )}
+
+      {activeTab === "rescue" && (
+        <div className="mt-6 space-y-6">
+          {rescueSummary && (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
+              <StatCard label="Candidates" value={rescueSummary.total_candidates || 0} accent="cyan" theme={theme} />
+              <StatCard label="Shelter route" value={rescueSummary.animal_shelter || 0} accent="emerald" theme={theme} />
+              <StatCard label="NGO/orphanage" value={rescueSummary.ngo_orphanage || 0} accent="violet" theme={theme} />
+              <StatCard label="Compost/biogas" value={rescueSummary.compost_biogas || 0} accent="amber" theme={theme} />
+              <StatCard
+                label="Needs onboarding"
+                value={rescueSummary.needs_onboarding || 0}
+                accent={(rescueSummary.needs_onboarding || 0) > 0 ? "rose" : "teal"}
+                theme={theme}
+              />
+              <StatCard label="Meals (est.)" value={rescueSummary.estimated_meals || 0} accent="teal" theme={theme} />
+              <StatCard label="CO2 saved" value={`${rescueSummary.estimated_co2_kg || 0}kg`} accent="emerald" theme={theme} />
+              <StatCard label="Kg diverted" value={`${rescueSummary.estimated_kg_diverted || 0}kg`} accent="cyan" theme={theme} />
+            </div>
+          )}
+
+          <Section title={`Rescue routing queue (${rescueRouting.length})`} theme={theme}>
+            {rescueRouting.length === 0 ? (
+              <EmptyState
+                message="No perishable batches need rescue routing in the current time window."
+                theme={theme}
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1540px] text-sm">
+                  <thead>
+                    <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
+                      <th className="pb-3 text-left font-medium">Product</th>
+                      <th className="pb-3 text-left font-medium">Category</th>
+                      <th className="pb-3 text-right font-medium">Qty</th>
+                      <th className="pb-3 text-right font-medium">Days left</th>
+                      <th className="pb-3 text-right font-medium">Rescue score</th>
+                      <th className="pb-3 text-left font-medium">Route</th>
+                      <th className="pb-3 text-left font-medium">Assigned partner</th>
+                      <th className="pb-3 text-left font-medium">Distance / ETA</th>
+                      <th className="pb-3 text-left font-medium">Pickup by</th>
+                      <th className="pb-3 text-left font-medium">Movement</th>
+                      <th className="pb-3 text-left font-medium">Contact</th>
+                      <th className="pb-3 text-left font-medium">Why</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rescueRouting.map((item) => (
+                      <tr key={`${item.batch_id}-${item.product_id}`} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                        <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{item.product_name}</td>
+                        <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{item.category_name}</td>
+                        <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{item.quantity}</td>
+                        <td className="py-3 text-right">
+                          <span className={cx("rounded-full px-2 py-0.5 text-xs font-semibold", item.days_left < 0 ? (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700") : item.days_left <= 1 ? (isDark ? "bg-orange-500/15 text-orange-200" : "bg-orange-100 text-orange-700") : (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"))}>
+                            {item.days_left}d
+                          </span>
+                        </td>
+                        <td className={cx("py-3 text-right font-semibold", item.rescue_score >= 85 ? (isDark ? "text-rose-300" : "text-rose-600") : item.rescue_score >= 65 ? (isDark ? "text-amber-200" : "text-amber-700") : (isDark ? "text-emerald-300" : "text-emerald-700"))}>
+                          {item.rescue_score}
+                        </td>
+                        <td className="py-3">
+                          <span className={cx("rounded-full px-2 py-0.5 text-xs font-semibold", item.route_channel === "animal_shelter" ? (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700") : item.route_channel === "ngo_orphanage" ? (isDark ? "bg-violet-500/15 text-violet-200" : "bg-violet-100 text-violet-700") : (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700"))}>
+                            {item.route_channel === "animal_shelter" ? "Animal shelter" : item.route_channel === "ngo_orphanage" ? "NGO/Orphanage" : "Compost/Biogas"}
+                          </span>
+                        </td>
+                        <td className={cx("py-3", isDark ? "text-cyan-200" : "text-cyan-700")}>
+                          {item.partner_name ? `${item.partner_name} (${item.partner_city || "N/A"})` : "Partner onboarding needed"}
+                        </td>
+                        <td className={cx("py-3 text-xs", isDark ? "text-slate-300" : "text-slate-600")}>
+                          {item.distance_km != null ? `${item.distance_km} km` : "Distance N/A"}
+                          {" · "}
+                          {item.eta_mins != null ? `${item.eta_mins} min` : "ETA N/A"}
+                        </td>
+                        <td className={cx("py-3 text-xs", isDark ? "text-slate-300" : "text-slate-600")}>
+                          {item.pickup_by || "-"}
+                        </td>
+                        <td className="py-3">
+                          <span className={cx(
+                            "rounded-full px-2 py-0.5 text-xs font-semibold",
+                            item.dispatch_status === "in_transit"
+                              ? (isDark ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-100 text-cyan-700")
+                              : item.dispatch_status === "completed"
+                                ? (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700")
+                                : item.dispatch_status === "route_planned" || item.dispatch_status === "accepted" || item.dispatch_status === "pending"
+                                  ? (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700")
+                                  : (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700")
+                          )}>
+                            {String(item.dispatch_status || "unknown").replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{item.partner_contact || "-"}</td>
+                        <td className={cx("max-w-[320px] py-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{item.route_reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
+          {rescueAnalytics && (
+            <div className="grid gap-6 lg:grid-cols-3">
+              <Section title="Urgency Mix" theme={theme}>
+                <div className="space-y-2">
+                  {Object.entries(rescueAnalytics.urgency_breakdown || {}).map(([k, v]) => (
+                    <div key={k} className={cx("flex items-center justify-between rounded-xl px-3 py-2", isDark ? "bg-slate-900/70" : "bg-slate-50")}>
+                      <span className={cx("text-xs uppercase", isDark ? "text-slate-400" : "text-slate-500")}>{k}</span>
+                      <span className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+              <Section title="City Hotspots" theme={theme}>
+                <div className="space-y-2">
+                  {(rescueAnalytics.city_breakdown || []).slice(0, 6).map((row) => (
+                    <div key={row.city} className={cx("flex items-center justify-between rounded-xl px-3 py-2", isDark ? "bg-slate-900/70" : "bg-slate-50")}>
+                      <span className={cx("text-sm", isDark ? "text-slate-200" : "text-slate-700")}>{row.city}</span>
+                      <span className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+              <Section title="Category Pressure" theme={theme}>
+                <div className="space-y-2">
+                  {(rescueAnalytics.category_breakdown || []).slice(0, 6).map((row) => (
+                    <div key={row.category} className={cx("flex items-center justify-between rounded-xl px-3 py-2", isDark ? "bg-slate-900/70" : "bg-slate-50")}>
+                      <span className={cx("text-sm", isDark ? "text-slate-200" : "text-slate-700")}>{row.category}</span>
+                      <span className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </div>
+          )}
+
+          {rescueAnalytics && (rescueAnalytics.partner_utilization || []).length > 0 && (
+            <Section title="Partner Utilization" theme={theme}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[880px] text-sm">
+                  <thead>
+                    <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
+                      <th className="pb-3 text-left font-medium">Partner</th>
+                      <th className="pb-3 text-left font-medium">Type</th>
+                      <th className="pb-3 text-left font-medium">City</th>
+                      <th className="pb-3 text-right font-medium">Batches</th>
+                      <th className="pb-3 text-right font-medium">Assigned Qty</th>
+                      <th className="pb-3 text-right font-medium">Capacity</th>
+                      <th className="pb-3 text-right font-medium">Utilization</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(rescueAnalytics.partner_utilization || []).map((p) => (
+                      <tr key={p.partner_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                        <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{p.partner_name}</td>
+                        <td className={cx("py-3 text-xs uppercase", isDark ? "text-slate-400" : "text-slate-500")}>{p.partner_type}</td>
+                        <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{p.partner_city}</td>
+                        <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{p.assigned_batches}</td>
+                        <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{p.assigned_quantity}</td>
+                        <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{p.capacity}</td>
+                        <td className={cx("py-3 text-right font-semibold", p.utilization_pct >= 80 ? (isDark ? "text-rose-300" : "text-rose-600") : p.utilization_pct >= 60 ? (isDark ? "text-amber-200" : "text-amber-700") : (isDark ? "text-emerald-300" : "text-emerald-700"))}>
+                          {p.utilization_pct}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
+          {rescueOnboarding.length > 0 && (
+            <Section title="Partner onboarding gaps" theme={theme}>
+              <div className="space-y-3">
+                {rescueOnboarding.map((item, index) => (
+                  <div key={index} className={cx("rounded-2xl border px-4 py-3", isDark ? "border-amber-400/20 bg-amber-500/10" : "border-amber-100 bg-amber-50/80")}>
+                    <p className={cx("text-sm font-semibold", isDark ? "text-amber-200" : "text-amber-700")}>
+                      Need partner type: {item.needed_partner_type}
+                    </p>
+                    <p className={cx("mt-1 text-xs", isDark ? "text-amber-100/80" : "text-amber-700/80")}>{item.why}</p>
                   </div>
                 ))}
               </div>
