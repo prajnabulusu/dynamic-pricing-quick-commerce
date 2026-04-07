@@ -44,7 +44,7 @@ function ThemeToggle({ theme, onToggle }) {
 export default function App() {
   const [page, setPage] = useState("shop");
   const [cart, setCart] = useState([]);
-  const [toast, setToast] = useState(null);
+  const [toasts, setToasts] = useState([]);
   const [theme, setTheme] = useState(getInitialTheme);
 
   useEffect(() => {
@@ -53,9 +53,14 @@ export default function App() {
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  const showToast = (msg, type = "success", options = {}) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setToasts((prev) => [{ id, msg, type, ...options }, ...prev].slice(0, 4));
+    setTimeout(() => removeToast(id), 3500);
   };
 
   const addToCart = (product) => {
@@ -204,17 +209,49 @@ export default function App() {
       )}
       {page === "admin" && <AdminDashboard theme={theme} />}
 
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl px-5 py-3 text-sm font-medium shadow-2xl transition-all ${
-            toast.type === "success"
-              ? isDark
-                ? "border border-emerald-400/20 bg-slate-900 text-slate-50"
-                : "bg-slate-900 text-white"
-              : "bg-rose-600 text-white"
-          }`}
-        >
-          {toast.msg}
+      {toasts.length > 0 && (
+        <div className="fixed right-4 top-20 z-50 flex w-[min(92vw,380px)] flex-col gap-3">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-2xl px-4 py-3 text-sm font-medium shadow-2xl transition-all ${
+                toast.type === "success"
+                  ? isDark
+                    ? "border border-emerald-400/20 bg-slate-900 text-slate-50"
+                    : "bg-slate-900 text-white"
+                  : "bg-rose-600 text-white"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex-1 leading-relaxed">{toast.msg}</span>
+                <button
+                  onClick={() => removeToast(toast.id)}
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    isDark ? "bg-white/10 hover:bg-white/20" : "bg-white/20 hover:bg-white/30"
+                  }`}
+                >
+                  x
+                </button>
+              </div>
+              {toast.actionLabel && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => {
+                      toast.onAction?.();
+                      removeToast(toast.id);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      isDark
+                        ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                        : "bg-white text-slate-900 hover:bg-slate-100"
+                    }`}
+                  >
+                    {toast.actionLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

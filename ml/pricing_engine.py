@@ -137,11 +137,21 @@ class PricingEngine:
         if isinstance(expiry, str):
             expiry = date.fromisoformat(expiry)
         days = (expiry - date.today()).days
-        if days <= 0:   return 0.50, "Expired — flag for redistribution"
-        elif days == 1: return 0.40, "Expiring tomorrow — deep discount"
-        elif days == 2: return 0.25, "Expiring in 2 days — discount"
-        elif days <= 4: return 0.10, "Expiring soon — small discount"
+        # Strong markdown for near-expiry inventory to maximize sell-through.
+        if days <= 0:   return 0.80, "Expired - emergency markdown, flag for redistribution"
+        elif days == 1: return 0.70, "Expiring tomorrow - emergency markdown"
+        elif days == 2: return 0.60, "Expiring in 2 days - heavy markdown"
+        elif days == 3: return 0.50, "Expiring in 3 days - heavy markdown"
+        elif days <= 4: return 0.20, "Expiring soon - discount"
         return 0.0, "Fresh stock"
+
+    def _expiry_days_left(self, product: dict) -> int | None:
+        if not product["is_perishable"] or not product["nearest_expiry"]:
+            return None
+        expiry = product["nearest_expiry"]
+        if isinstance(expiry, str):
+            expiry = date.fromisoformat(expiry)
+        return (expiry - date.today()).days
 
     def _get_competitor_ceiling(self, product_id: int) -> float | None:
         conn = self._get_db_connection()
@@ -218,9 +228,12 @@ class PricingEngine:
             * weather_mult
         )
 
+        days_left = self._expiry_days_left(product)
+        min_multiplier = 0.20 if (days_left is not None and days_left <= 3) else MIN_PRICE_MULTIPLIER
+
         final_price = round(float(np.clip(
             raw_price,
-            base * MIN_PRICE_MULTIPLIER,
+            base * min_multiplier,
             base * MAX_PRICE_MULTIPLIER,
         )), 2)
         final_price = max(final_price, float(product["cost_price"]) * 1.05)
