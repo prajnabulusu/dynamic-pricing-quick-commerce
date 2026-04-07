@@ -186,26 +186,92 @@ else:
 conn.commit()
 
 # ── 7. Redistribution partners ────────────────────────────────────────────────
-cur.execute("SELECT COUNT(*) FROM redistribution_partners;")
-if cur.fetchone()[0] == 0:
+cur.execute("""
+    SELECT COUNT(*)
+    FROM perishable_batches
+    WHERE expiry_date >= CURRENT_DATE - INTERVAL '1 day'
+      AND expiry_date <= CURRENT_DATE + INTERVAL '3 days';
+""")
+window_count = cur.fetchone()[0]
+
+if window_count < 18:
+    cur.execute("""
+        SELECT p.product_id, i.warehouse_id
+        FROM products p
+        JOIN inventory i ON p.product_id = i.product_id
+        WHERE p.is_perishable = TRUE;
+    """)
+    candidate_pairs = cur.fetchall()
+    import random
+    from datetime import date, timedelta
+    random.seed(207)
+    target_rows = min(30, 18 - window_count)
+    supplemental = []
+    for _ in range(target_rows):
+        if not candidate_pairs:
+            break
+        pid, wid = random.choice(candidate_pairs)
+        days_offset = random.choice([-1, 0, 1, 1, 2, 2, 3])
+        qty = random.randint(15, 90)
+        supplemental.append((pid, wid, qty, date.today() + timedelta(days=days_offset)))
+    if supplemental:
+        cur.executemany(
+            """INSERT INTO perishable_batches
+               (product_id, warehouse_id, quantity, expiry_date)
+               VALUES (%s, %s, %s, %s);""",
+            supplemental,
+        )
+        print(f"  Added {len(supplemental)} supplemental rescue-window batches")
+else:
+    print("  Rescue-window perishable data already sufficient")
+
+conn.commit()
+
+cur.execute("""
+    ALTER TABLE redistribution_partners
+    DROP CONSTRAINT IF EXISTS redistribution_partners_type_check;
+""")
+cur.execute("""
+    ALTER TABLE redistribution_partners
+    ADD CONSTRAINT redistribution_partners_type_check
+    CHECK (type IN ('animal_shelter', 'NGO', 'orphanage', 'compost', 'biogas'));
+""")
+conn.commit()
+
+cur.execute("SELECT name FROM redistribution_partners;")
+existing_partner_names = {row[0] for row in cur.fetchall()}
+
+baseline_partners = [
+    ("Blue Cross Animal Shelter", "animal_shelter", "Hyderabad", "9876543210", 200),
+    ("People For Animals NGO", "NGO", "Bangalore", "9123456780", 300),
+    ("Chennai SPCA", "animal_shelter", "Chennai", "9988776655", 150),
+    ("Robin Hood Army", "NGO", "Hyderabad", "9090909090", 500),
+    ("Companion Care Shelter", "animal_shelter", "Bangalore", "9881234567", 180),
+    ("Street Paws Shelter", "animal_shelter", "Mumbai", "9891002003", 240),
+    ("Nourish Families Trust", "NGO", "Chennai", "9001002003", 420),
+    ("Hope Meals Collective", "NGO", "Delhi", "9011002203", 390),
+    ("Smile Foundation Orphanage Network", "orphanage", "Hyderabad", "9012345678", 280),
+    ("Little Hearts Home", "orphanage", "Chennai", "9033304445", 260),
+    ("GreenLoop Compost Collective", "compost", "Bangalore", "9345678123", 600),
+    ("EcoCycle Compost Yard", "compost", "Hyderabad", "9361112233", 520),
+    ("BioFuel Circular Hub", "biogas", "Chennai", "9456123780", 550),
+    ("Urban BioEnergy Plant", "biogas", "Mumbai", "9477001122", 640),
+]
+
+partners_to_insert = [
+    partner for partner in baseline_partners if partner[0] not in existing_partner_names
+]
+
+if partners_to_insert:
     cur.executemany(
         """INSERT INTO redistribution_partners
            (name, type, location, contact_details, capacity)
            VALUES (%s, %s, %s, %s, %s);""",
-        [
-            ("Blue Cross Animal Shelter", "animal_shelter",
-             "Hyderabad", "9876543210", 200),
-            ("People For Animals NGO",    "NGO",
-             "Bangalore", "9123456780", 300),
-            ("Chennai SPCA",              "animal_shelter",
-             "Chennai",   "9988776655", 150),
-            ("Robin Hood Army",           "NGO",
-             "Hyderabad", "9090909090", 500),
-        ],
+        partners_to_insert,
     )
-    print("  Inserted 4 redistribution partners")
+    print(f"  Inserted {len(partners_to_insert)} redistribution partners")
 else:
-    print("  Partners already exist — skipping")
+    print("  Redistribution partners are already up to date")
 
 conn.commit()
 
