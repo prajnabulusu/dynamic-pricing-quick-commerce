@@ -1,207 +1,447 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { getProducts, placeOrder, recordEvent, getViewStats } from "../api";
 
 const SESSION_ID = Math.random().toString(36).slice(2, 10);
 
-function ExpiryBadge({ product }) {
+const cx = (...classes) => classes.filter(Boolean).join(" ");
+
+const CATEGORY_THEMES = [
+  {
+    light: {
+      section: "border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/30",
+      headerPill: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+      chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80",
+      glow: "bg-emerald-300/25",
+    },
+    dark: {
+      section: "border-emerald-400/20 bg-gradient-to-br from-emerald-400/10 via-white/[0.03] to-transparent",
+      headerPill: "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/25",
+      chip: "bg-emerald-400/12 text-emerald-200 ring-1 ring-emerald-400/25",
+      glow: "bg-emerald-300/20",
+    },
+  },
+  {
+    light: {
+      section: "border-cyan-200/70 bg-gradient-to-br from-cyan-50/80 via-white to-cyan-50/30",
+      headerPill: "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200",
+      chip: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200/80",
+      glow: "bg-cyan-300/25",
+    },
+    dark: {
+      section: "border-cyan-400/20 bg-gradient-to-br from-cyan-400/10 via-white/[0.03] to-transparent",
+      headerPill: "bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-400/25",
+      chip: "bg-cyan-400/12 text-cyan-200 ring-1 ring-cyan-400/25",
+      glow: "bg-cyan-300/20",
+    },
+  },
+  {
+    light: {
+      section: "border-amber-200/70 bg-gradient-to-br from-amber-50/80 via-white to-amber-50/30",
+      headerPill: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+      chip: "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80",
+      glow: "bg-amber-300/25",
+    },
+    dark: {
+      section: "border-amber-400/20 bg-gradient-to-br from-amber-400/10 via-white/[0.03] to-transparent",
+      headerPill: "bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/25",
+      chip: "bg-amber-400/12 text-amber-200 ring-1 ring-amber-400/25",
+      glow: "bg-amber-300/20",
+    },
+  },
+  {
+    light: {
+      section: "border-violet-200/70 bg-gradient-to-br from-violet-50/80 via-white to-violet-50/30",
+      headerPill: "bg-violet-100 text-violet-700 ring-1 ring-violet-200",
+      chip: "bg-violet-50 text-violet-700 ring-1 ring-violet-200/80",
+      glow: "bg-violet-300/25",
+    },
+    dark: {
+      section: "border-violet-400/20 bg-gradient-to-br from-violet-400/10 via-white/[0.03] to-transparent",
+      headerPill: "bg-violet-400/15 text-violet-200 ring-1 ring-violet-400/25",
+      chip: "bg-violet-400/12 text-violet-200 ring-1 ring-violet-400/25",
+      glow: "bg-violet-300/20",
+    },
+  },
+];
+
+function getCategoryTheme(categoryName) {
+  const normalized = (categoryName || "general").toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash + normalized.charCodeAt(i)) % CATEGORY_THEMES.length;
+  }
+  return CATEGORY_THEMES[hash];
+}
+
+function ExpiryBadge({ product, theme }) {
   if (!product.is_perishable) return null;
+
+  const isDark = theme === "dark";
   const reason = (product.price_reason || "").toLowerCase();
-  if (reason.includes("expired"))
-    return <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold animate-pulse">Expired — redistributing</span>;
-  if (reason.includes("tomorrow"))
-    return <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">Expires tomorrow</span>;
-  if (reason.includes("2 day"))
-    return <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">Expires in 2 days</span>;
-  if (reason.includes("expir"))
-    return <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Expiring soon</span>;
+
+  if (reason.includes("expired")) {
+    return (
+      <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white animate-pulse">
+        Expired - redistributing
+      </span>
+    );
+  }
+
+  if (reason.includes("tomorrow")) {
+    return (
+      <span className={cx(
+        "rounded-full px-2 py-0.5 text-xs font-semibold",
+        isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700"
+      )}>
+        Expires tomorrow
+      </span>
+    );
+  }
+
+  if (reason.includes("2 day")) {
+    return (
+      <span className={cx(
+        "rounded-full px-2 py-0.5 text-xs font-semibold",
+        isDark ? "bg-orange-400/15 text-orange-200" : "bg-orange-100 text-orange-700"
+      )}>
+        Expires in 2 days
+      </span>
+    );
+  }
+
+  if (reason.includes("expir")) {
+    return (
+      <span className={cx(
+        "rounded-full px-2 py-0.5 text-xs font-medium",
+        isDark ? "bg-amber-400/15 text-amber-200" : "bg-amber-100 text-amber-700"
+      )}>
+        Expiring soon
+      </span>
+    );
+  }
+
   return null;
 }
 
 function usePriceFlash(price) {
   const prevRef = useRef(null);
   const [flash, setFlash] = useState(null);
+
   useEffect(() => {
-    if (prevRef.current === null) { prevRef.current = price; return; }
-    if (price > prevRef.current) { setFlash("up"); setTimeout(() => setFlash(null), 1400); }
-    else if (price < prevRef.current) { setFlash("down"); setTimeout(() => setFlash(null), 1400); }
+    if (prevRef.current === null) {
+      prevRef.current = price;
+      return;
+    }
+
+    let timeoutId;
+
+    if (price > prevRef.current) {
+      setFlash("up");
+      timeoutId = setTimeout(() => setFlash(null), 1400);
+    } else if (price < prevRef.current) {
+      setFlash("down");
+      timeoutId = setTimeout(() => setFlash(null), 1400);
+    }
+
     prevRef.current = price;
+    return () => clearTimeout(timeoutId);
   }, [price]);
+
   return flash;
 }
 
-function ViewingNow({ productId }) {
+function ViewingNow({ productId, theme }) {
   const [label, setLabel] = useState("");
+
   useEffect(() => {
     let cancelled = false;
+
     const poll = async () => {
-      try { const { data } = await getViewStats(productId); if (!cancelled) setLabel(data.viewing_now_label || ""); }
-      catch { /* ignore */ }
+      try {
+        const { data } = await getViewStats(productId);
+        if (!cancelled) {
+          setLabel(data.viewing_now_label || "");
+        }
+      } catch {
+        // ignore polling errors
+      }
     };
+
     poll();
     const id = setInterval(poll, 5000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [productId]);
+
   if (!label) return null;
-  return <span className="text-xs text-orange-600 font-medium">{label}</span>;
+
+  return (
+    <span className={cx(
+      "text-xs font-medium",
+      theme === "dark" ? "text-orange-200" : "text-orange-600"
+    )}>
+      {label}
+    </span>
+  );
 }
 
-function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount }) {
-  const flash        = usePriceFlash(product.current_price);
-  const demand       = product.demand_score ?? 0;
+function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, theme, categoryTheme }) {
+  const isDark = theme === "dark";
+  const flash = usePriceFlash(product.current_price);
+  const demand = product.demand_score ?? 0;
   const isHighDemand = demand > 0.7;
-  const isExpiring   = (product.price_reason || "").toLowerCase().includes("expir");
-  const isLowStock   = product.stock_quantity > 0 && product.stock_quantity <= 5;
+  const isExpiring = (product.price_reason || "").toLowerCase().includes("expir");
+  const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 5;
   const isOutOfStock = product.stock_quantity === 0;
-  const pctChange    = product.base_price
-    ? ((product.current_price - product.base_price) / product.base_price) * 100 : 0;
-  const priceUp   = pctChange >  0.5;
+  const pctChange = product.base_price
+    ? ((product.current_price - product.base_price) / product.base_price) * 100
+    : 0;
+  const priceUp = pctChange > 0.5;
   const priceDown = pctChange < -0.5;
 
-  const borderCls = flash === "up"   ? "border-red-300 shadow-red-100 shadow-md"
-                  : flash === "down" ? "border-green-300 shadow-green-100 shadow-md"
-                  : "border-gray-100";
+  const shellClass = flash === "up"
+    ? isDark
+      ? "border-rose-400/40 shadow-[0_18px_45px_rgba(244,63,94,0.16)]"
+      : "border-rose-200 shadow-[0_18px_45px_rgba(244,63,94,0.12)]"
+    : flash === "down"
+      ? isDark
+        ? "border-emerald-400/40 shadow-[0_18px_45px_rgba(16,185,129,0.16)]"
+        : "border-emerald-200 shadow-[0_18px_45px_rgba(16,185,129,0.12)]"
+      : isDark
+        ? "border-white/10"
+        : "border-slate-200/80";
 
   return (
     <div
       onClick={() => onView(product)}
-      className={`bg-white rounded-2xl border p-4 flex flex-col gap-2.5
-        hover:shadow-md transition-all cursor-pointer select-none ${borderCls}`}
+      className={cx(
+        "group relative flex h-full cursor-pointer select-none flex-col gap-3 overflow-hidden rounded-[26px] border p-4 transition-all duration-300",
+        isDark
+          ? "bg-white/[0.04] hover:-translate-y-1 hover:border-cyan-300/20 hover:bg-white/[0.06]"
+          : "bg-white/85 hover:-translate-y-1 hover:border-cyan-200 hover:bg-white hover:shadow-[0_18px_40px_rgba(148,163,184,0.18)]",
+        shellClass
+      )}
     >
-      {/* Badges row */}
-      <div className="flex items-center justify-between gap-1 flex-wrap">
-        <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-          {product.category_name}
-        </span>
-        <div className="flex gap-1 flex-wrap">
+      <div className={cx(
+        "absolute inset-x-0 top-0 h-24 opacity-70 blur-2xl transition-opacity group-hover:opacity-100",
+        categoryTheme.glow
+      )} />
+
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <p className={cx(
+            "inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]",
+            categoryTheme.chip
+          )}>
+            {product.category_name}
+          </p>
+          <p className={cx(
+            "mt-2 text-base font-semibold leading-tight",
+            isDark ? "text-white" : "text-slate-900"
+          )}>
+            {product.name}
+          </p>
+          {product.brand && (
+            <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{product.brand}</p>
+          )}
+        </div>
+
+        <div className="flex flex-col items-end gap-1.5">
           {isHighDemand && (
-            <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold">Hot</span>
+            <span className={cx(
+              "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-50 text-rose-600"
+            )}>
+              Hot
+            </span>
           )}
           {isExpiring
-            ? <ExpiryBadge product={product} />
-            : product.is_perishable && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Fresh</span>
-          }
+            ? <ExpiryBadge product={product} theme={theme} />
+            : product.is_perishable && (
+              <span className={cx(
+                "rounded-full px-2 py-0.5 text-[11px]",
+                isDark ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-50 text-emerald-700"
+              )}>
+                Fresh
+              </span>
+            )}
         </div>
       </div>
 
-      {/* Name */}
-      <div>
-        <p className="font-semibold text-gray-900 leading-tight text-sm">{product.name}</p>
-        {product.brand && <p className="text-xs text-gray-400">{product.brand}</p>}
-      </div>
-
-      {/* Price with flash */}
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className={`text-xl font-bold transition-colors duration-300
-          ${flash === "up" ? "text-red-600" : flash === "down" ? "text-green-600" : "text-gray-900"}`}>
-          ₹{product.current_price.toFixed(2)}
-        </span>
-        {(priceUp || priceDown) && (
-          <>
-            <span className="text-sm text-gray-400 line-through">₹{product.base_price.toFixed(2)}</span>
-            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full
-              ${priceUp ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-              {priceUp ? "▲" : "▼"} {Math.abs(pctChange).toFixed(1)}%
+      <div className="relative flex items-end justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cx(
+              "text-2xl font-black tracking-tight transition-colors duration-300",
+              flash === "up"
+                ? "text-rose-500"
+                : flash === "down"
+                  ? "text-emerald-500"
+                  : isDark
+                    ? "text-white"
+                    : "text-slate-900"
+            )}>
+              Rs. {product.current_price.toFixed(2)}
             </span>
-          </>
-        )}
+            {(priceUp || priceDown) && (
+              <span className={cx(
+                "rounded-full px-2 py-1 text-[11px] font-semibold",
+                priceUp
+                  ? isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-50 text-rose-600"
+                  : isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"
+              )}>
+                {priceUp ? "UP" : "DOWN"} {Math.abs(pctChange).toFixed(1)}%
+              </span>
+            )}
+          </div>
+          {(priceUp || priceDown) && (
+            <p className={cx("text-xs line-through", isDark ? "text-slate-500" : "text-slate-400")}>
+              Rs. {product.base_price.toFixed(2)}
+            </p>
+          )}
+        </div>
         {flash && (
-          <span className={`text-xs font-bold animate-bounce
-            ${flash === "up" ? "text-red-500" : "text-green-500"}`}>
-            {flash === "up" ? "↑ rising!" : "↓ dropped!"}
+          <span className={cx(
+            "rounded-full px-2 py-1 text-[11px] font-bold",
+            flash === "up"
+              ? isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-50 text-rose-600"
+              : isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-50 text-emerald-600"
+          )}>
+            {flash === "up" ? "Rising" : "Dropped"}
           </span>
         )}
       </div>
 
-      {/* Demand bar */}
-      {product.demand_score != null && (
-        <div>
-          <div className="flex justify-between text-xs text-gray-400 mb-1">
-            <span>Demand</span><span>{Math.round(demand * 100)}%</span>
-          </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-700
-              ${demand > 0.7 ? "bg-red-400" : demand > 0.4 ? "bg-amber-400" : "bg-green-400"}`}
-              style={{ width: `${Math.round(demand * 100)}%` }} />
-          </div>
+      <div className="relative space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className={isDark ? "text-slate-400" : "text-slate-500"}>Demand pulse</span>
+          <span className={cx("font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>
+            {Math.round(demand * 100)}%
+          </span>
         </div>
-      )}
+        <div className={cx(
+          "h-2 overflow-hidden rounded-full",
+          isDark ? "bg-slate-800" : "bg-slate-100"
+        )}>
+          <div
+            className={cx(
+              "h-full rounded-full transition-all duration-700",
+              demand > 0.7 ? "bg-rose-400" : demand > 0.4 ? "bg-amber-400" : "bg-emerald-400"
+            )}
+            style={{ width: `${Math.round(demand * 100)}%` }}
+          />
+        </div>
+      </div>
 
-      {/* Viewing now */}
-      <ViewingNow productId={product.product_id} />
-
-      {/* Click counter */}
-      {clickCount > 0 && (
-        <p className="text-xs text-orange-500 font-medium">
-          You clicked {clickCount}× — demand signal sent
-        </p>
-      )}
-
-      {/* Price reason */}
-      {product.price_reason && (
-        <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">{product.price_reason}</p>
-      )}
-
-      {/* Stock indicator */}
-      <div className="flex items-center gap-1.5 text-xs">
-        {isLowStock ? (
-          <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-          <span className="text-red-600 font-semibold">Only {product.stock_quantity} left!</span></>
-        ) : isOutOfStock ? (
-          <><span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-          <span className="text-gray-400">Out of stock</span></>
-        ) : (
-          <><span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-          <span className="text-gray-500">In stock</span></>
+      <div className="relative flex min-h-10 items-center justify-between gap-3">
+        <ViewingNow productId={product.product_id} theme={theme} />
+        {clickCount > 0 && (
+          <p className={cx("text-xs font-medium", isDark ? "text-orange-200" : "text-orange-600")}>
+            You clicked {clickCount}x
+          </p>
         )}
       </div>
 
-      {/* Cart button */}
+      {product.price_reason && (
+        <p className={cx(
+          "relative rounded-2xl border px-3 py-2 text-xs leading-relaxed",
+          isDark
+            ? "border-white/10 bg-slate-900/70 text-slate-300"
+            : "border-slate-100 bg-slate-50/80 text-slate-500"
+        )}>
+          {product.price_reason}
+        </p>
+      )}
+
+      <div className="relative mt-auto flex items-center justify-between gap-3 pt-1 text-xs">
+        <div className="flex items-center gap-2">
+          <span className={cx(
+            "h-2.5 w-2.5 rounded-full",
+            isLowStock ? "bg-rose-500" : isOutOfStock ? "bg-slate-400" : "bg-emerald-400"
+          )} />
+          <span className={cx(
+            "font-medium",
+            isLowStock
+              ? isDark ? "text-rose-200" : "text-rose-600"
+              : isOutOfStock
+                ? isDark ? "text-slate-500" : "text-slate-400"
+                : isDark ? "text-slate-300" : "text-slate-600"
+          )}>
+            {isLowStock ? `Only ${product.stock_quantity} left` : isOutOfStock ? "Out of stock" : "In stock"}
+          </span>
+        </div>
+      </div>
+
       {inCart ? (
-        <button onClick={(e) => { e.stopPropagation(); onRemove(product.product_id); }}
-          className="mt-auto w-full py-2 rounded-xl border border-gray-200 text-sm
-            font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(product.product_id);
+          }}
+          className={cx(
+            "relative mt-1 w-full rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors",
+            isDark
+              ? "border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          )}
+        >
           Remove from cart
         </button>
       ) : (
-        <button disabled={isOutOfStock}
+        <button
+          disabled={isOutOfStock}
           onClick={(e) => {
             e.stopPropagation();
             onAdd(product);
-            recordEvent({ product_id: product.product_id, event_type: "cart_add", session_id: SESSION_ID }).catch(() => {});
+            recordEvent({
+              product_id: product.product_id,
+              event_type: "cart_add",
+              session_id: SESSION_ID,
+            }).catch(() => {});
           }}
-          className="mt-auto w-full py-2 rounded-xl bg-blue-600 text-white text-sm
-            font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed
-            transition-colors">
-          {isLowStock ? "Add — almost gone!" : "Add to cart"}
+          className={cx(
+            "relative mt-1 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all",
+            isDark
+              ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 disabled:bg-slate-800 disabled:text-slate-500"
+              : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400",
+            "disabled:cursor-not-allowed"
+          )}
+        >
+          {isLowStock ? "Add - almost gone" : "Add to cart"}
         </button>
       )}
     </div>
   );
 }
 
-function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced }) {
+function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
+  const isDark = theme === "dark";
   const [locationId, setLocationId] = useState(1);
-  const [loading, setLoading]       = useState(false);
-  const [result, setResult]         = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
   useEffect(() => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) return undefined;
+
     const id = setTimeout(() => {
       cart.forEach(({ product }) =>
         recordEvent({ product_id: product.product_id, event_type: "cart_abandon", session_id: SESSION_ID }).catch(() => {})
       );
     }, 60000);
+
     return () => clearTimeout(id);
   }, [cart]);
 
-  const total = cart.reduce((s, i) => s + i.product.current_price * i.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + item.product.current_price * item.quantity, 0);
 
   const submitOrder = async () => {
     setLoading(true);
     try {
       const { data } = await placeOrder({
         location_id: locationId,
-        items: cart.map((i) => ({ product_id: i.product.product_id, quantity: i.quantity })),
+        items: cart.map((item) => ({ product_id: item.product.product_id, quantity: item.quantity })),
       });
       setResult({ success: true, data });
       clearCart();
@@ -213,76 +453,171 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced }) {
     }
   };
 
-  if (result?.success) return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
-      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
-        </svg>
-      </div>
-      <p className="font-semibold text-gray-900 mb-1">Order placed!</p>
-      <p className="text-sm text-gray-500 mb-4">₹{result.data.total_amount.toFixed(2)} · Kafka is updating prices</p>
-      <button onClick={() => setResult(null)} className="text-sm text-blue-600 hover:underline">Place another</button>
-    </div>
+  const panelClass = cx(
+    "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
+    isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
   );
 
-  if (cart.length === 0) return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
-      <p className="text-gray-400 text-sm">Cart is empty</p>
-      <p className="text-xs text-gray-300 mt-1">Click products to send demand signals</p>
-    </div>
-  );
+  if (result?.success) {
+    return (
+      <div className={panelClass}>
+        <div className="flex flex-col items-center text-center">
+          <div className={cx(
+            "mb-4 flex h-14 w-14 items-center justify-center rounded-full",
+            isDark ? "bg-emerald-400/15 text-emerald-200" : "bg-emerald-100 text-emerald-600"
+          )}>
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
+            Order placed
+          </p>
+          <p className={cx("mt-2 text-sm", isDark ? "text-slate-400" : "text-slate-500")}>
+            Rs. {result.data.total_amount.toFixed(2)} and Kafka is updating prices.
+          </p>
+          <button
+            onClick={() => setResult(null)}
+            className={cx("mt-4 text-sm font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}
+          >
+            Place another
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (cart.length === 0) {
+    return (
+      <div className={panelClass}>
+        <p className={cx("text-sm font-medium", isDark ? "text-slate-300" : "text-slate-600")}>
+          Cart is empty
+        </p>
+        <p className={cx("mt-1 text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
+          Add products to watch the live pricing loop continue.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3">
-      <p className="font-semibold text-gray-900">Cart ({cart.length})</p>
-      <div className="flex flex-col gap-2">
+    <div className={panelClass}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
+            Cart
+          </p>
+          <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
+            {cart.length} unique item{cart.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className={cx(
+          "rounded-full px-3 py-1 text-xs font-semibold",
+          isDark ? "bg-cyan-400/15 text-cyan-200" : "bg-cyan-50 text-cyan-700"
+        )}>
+          Rs. {total.toFixed(2)}
+        </div>
+      </div>
+
+      <div className="space-y-3">
         {cart.map(({ product, quantity }) => (
-          <div key={product.product_id} className="flex items-center justify-between text-sm py-2 border-b border-gray-50 last:border-0">
-            <div>
-              <p className="font-medium text-gray-800 text-xs">{product.name}</p>
-              <p className="text-xs text-gray-400">₹{product.current_price.toFixed(2)} × {quantity}</p>
+          <div
+            key={product.product_id}
+            className={cx(
+              "flex items-center justify-between gap-3 rounded-2xl border px-3 py-3",
+              isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/80"
+            )}
+          >
+            <div className="min-w-0">
+              <p className={cx("truncate text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>
+                {product.name}
+              </p>
+              <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
+                Rs. {product.current_price.toFixed(2)} x {quantity}
+              </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900 text-sm">₹{(product.current_price * quantity).toFixed(2)}</span>
-              <button onClick={() => removeFromCart(product.product_id)} className="text-gray-300 hover:text-red-400 text-lg">×</button>
+              <span className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
+                Rs. {(product.current_price * quantity).toFixed(2)}
+              </span>
+              <button
+                onClick={() => removeFromCart(product.product_id)}
+                className={cx("text-lg", isDark ? "text-slate-500 hover:text-rose-300" : "text-slate-300 hover:text-rose-500")}
+              >
+                x
+              </button>
             </div>
           </div>
         ))}
       </div>
-      <select value={locationId} onChange={(e) => setLocationId(Number(e.target.value))}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value={1}>Hyderabad</option>
-        <option value={2}>Bangalore</option>
-        <option value={3}>Chennai</option>
-        <option value={4}>Mumbai</option>
-        <option value={5}>Delhi</option>
-      </select>
-      <div className="border-t border-gray-100 pt-3">
-        <div className="flex justify-between items-center mb-3">
-          <span className="font-semibold text-gray-700 text-sm">Total</span>
-          <span className="text-xl font-bold text-gray-900">₹{total.toFixed(2)}</span>
+
+      <div className="mt-4 space-y-4">
+        <select
+          value={locationId}
+          onChange={(e) => setLocationId(Number(e.target.value))}
+          className={cx(
+            "w-full rounded-2xl border px-4 py-3 text-sm outline-none transition-colors",
+            isDark
+              ? "border-white/10 bg-slate-900/80 text-slate-100 focus:border-cyan-300/40"
+              : "border-slate-200 bg-white text-slate-800 focus:border-cyan-400"
+          )}
+        >
+          <option value={1}>Hyderabad</option>
+          <option value={2}>Bangalore</option>
+          <option value={3}>Chennai</option>
+          <option value={4}>Mumbai</option>
+          <option value={5}>Delhi</option>
+        </select>
+
+        <div className={cx(
+          "rounded-2xl border px-4 py-4",
+          isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50/80"
+        )}>
+          <div className="flex items-center justify-between">
+            <span className={cx("text-sm font-medium", isDark ? "text-slate-300" : "text-slate-600")}>
+              Total
+            </span>
+            <span className={cx("text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>
+              Rs. {total.toFixed(2)}
+            </span>
+          </div>
+          {result?.success === false && (
+            <p className={cx("mt-2 text-xs", isDark ? "text-rose-300" : "text-rose-500")}>{result.msg}</p>
+          )}
+          <button
+            onClick={submitOrder}
+            disabled={loading}
+            className={cx(
+              "mt-4 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all",
+              isDark
+                ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 disabled:bg-slate-800 disabled:text-slate-500"
+                : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+            )}
+          >
+            {loading ? "Placing..." : "Place order"}
+          </button>
+          <button
+            onClick={clearCart}
+            className={cx("mt-3 w-full text-xs font-medium", isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800")}
+          >
+            Clear cart
+          </button>
         </div>
-        {result?.success === false && <p className="text-xs text-red-500 mb-2">{result.msg}</p>}
-        <button onClick={submitOrder} disabled={loading}
-          className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
-          {loading ? "Placing..." : "Place order"}
-        </button>
-        <button onClick={clearCart} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600">Clear cart</button>
       </div>
     </div>
   );
 }
 
-export default function ProductsPage({ cart, addToCart, removeFromCart, clearCart, showToast }) {
-  const [products,    setProducts]    = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState(null);
-  const [filter,      setFilter]      = useState("All");
+export default function ProductsPage({ cart, addToCart, removeFromCart, clearCart, showToast, theme }) {
+  const isDark = theme === "dark";
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("All");
   const [lastRefresh, setLastRefresh] = useState(null);
   const [clickCounts, setClickCounts] = useState({});
 
-  const cartIds = new Set(cart.map((i) => i.product.product_id));
+  const cartIds = new Set(cart.map((item) => item.product.product_id));
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -308,102 +643,222 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
     recordEvent({ product_id: product.product_id, event_type: "view", session_id: SESSION_ID }).catch(() => {});
   }, []);
 
-  const categories = ["All", ...new Set(products.map((p) => p.category_name))];
-  const filtered   = filter === "All" ? products : products.filter((p) => p.category_name === filter);
-  const totalClicks = Object.values(clickCounts).reduce((a, b) => a + b, 0);
+  const categories = ["All", ...new Set(products.map((product) => product.category_name))];
+  const filtered = filter === "All" ? products : products.filter((product) => product.category_name === filter);
+  const categoryOrder = categories.filter((category) => category !== "All");
+  const groupedProducts = categoryOrder
+    .map((category) => ({
+      category,
+      items: filtered.filter((product) => product.category_name === category),
+    }))
+    .filter((group) => group.items.length > 0);
+  const totalClicks = Object.values(clickCounts).reduce((sum, value) => sum + value, 0);
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className={cx(
+          "h-8 w-8 animate-spin rounded-full border-2 border-t-transparent",
+          isDark ? "border-cyan-300" : "border-slate-900"
+        )} />
+      </div>
+    );
+  }
 
-  if (error) return (
-    <div className="max-w-md mx-auto mt-16 text-center px-4">
-      <p className="text-red-500 text-sm">{error}</p>
-      <button onClick={fetchProducts} className="mt-3 text-blue-600 text-sm hover:underline">Retry</button>
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="mx-auto mt-16 max-w-md px-4 text-center">
+        <p className={cx("text-sm", isDark ? "text-rose-300" : "text-rose-500")}>{error}</p>
+        <button onClick={fetchProducts} className={cx("mt-3 text-sm font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="flex gap-6">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Products</h1>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Prices refresh every 5s · click to drive demand
-                {lastRefresh && ` · ${lastRefresh.toLocaleTimeString()}`}
+    <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-6">
+          <section className={cx(
+            "overflow-hidden rounded-[32px] border p-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)]",
+            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+          )}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
+              <div>
+                <span className={cx(
+                  "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
+                  isDark ? "bg-cyan-400/10 text-cyan-200" : "bg-cyan-50 text-cyan-700"
+                )}>
+                  Live shop
+                </span>
+                <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
+                  Demand-reactive storefront
+                </h1>
+                <p className={cx("mt-3 max-w-2xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
+                  Prices refresh every 5 seconds. Product clicks still send demand events into Kafka, while this layer focuses on clearer hierarchy, stronger contrast, and a proper dark mode.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className={cx(
+                  "rounded-2xl border px-4 py-4",
+                  isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50"
+                )}>
+                  <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>
+                    Visible
+                  </p>
+                  <p className={cx("mt-2 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>
+                    {filtered.length}
+                  </p>
+                </div>
+                <div className={cx(
+                  "rounded-2xl border px-4 py-4",
+                  isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50"
+                )}>
+                  <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>
+                    Signals
+                  </p>
+                  <p className={cx("mt-2 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>
+                    {totalClicks}
+                  </p>
+                </div>
+                <div className={cx(
+                  "rounded-2xl border px-4 py-4",
+                  isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50"
+                )}>
+                  <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>
+                    In cart
+                  </p>
+                  <p className={cx("mt-2 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>
+                    {cart.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className={cx(
+              "mt-6 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
+              isDark ? "border-cyan-400/15 bg-cyan-400/10 text-cyan-100" : "border-cyan-100 bg-cyan-50 text-cyan-800"
+            )}>
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <p>
+                System is live. Click a product card to emit a Kafka demand event and watch pricing react.
+                {lastRefresh && ` Last refresh: ${lastRefresh.toLocaleTimeString()}`}
               </p>
             </div>
-            {totalClicks > 0 && (
-              <p className="text-xs text-orange-600 font-medium">
-                {totalClicks} demand signal{totalClicks !== 1 ? "s" : ""} sent
-              </p>
-            )}
-          </div>
+          </section>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            <p className="text-xs text-blue-700">
-              <span className="font-semibold">Live system active.</span>{" "}
-              Click a product card to send a Kafka demand event. Click rapidly to watch the price rise in real time.
-            </p>
-          </div>
-
-          <div className="flex gap-2 flex-wrap mb-5">
-            {categories.map((c) => (
-              <button key={c} onClick={() => setFilter(c)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  filter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-blue-300"
-                }`}>
-                {c}
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setFilter(category)}
+                className={cx(
+                  "rounded-full px-4 py-2 text-xs font-semibold transition-all",
+                  filter === category
+                    ? isDark
+                      ? "bg-cyan-400 text-slate-950"
+                      : "bg-slate-900 text-white"
+                    : isDark
+                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                      : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
+                )}
+              >
+                {category}
               </button>
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((product) => (
-              <div key={product.product_id} className="relative">
-                {(clickCounts[product.product_id] || 0) > 0 && (
-                  <div className="absolute -top-2 -right-2 z-10 bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
-                    {clickCounts[product.product_id]}
+          <div className="space-y-5">
+            {groupedProducts.map((group) => {
+              const tone = getCategoryTheme(group.category);
+              const categoryTheme = isDark ? tone.dark : tone.light;
+
+              return (
+                <section
+                  key={group.category}
+                  className={cx(
+                    "rounded-[30px] border p-4 sm:p-5",
+                    categoryTheme.section
+                  )}
+                >
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className={cx("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]", categoryTheme.headerPill)}>
+                        {group.category}
+                      </span>
+                      <span className={cx("text-xs font-medium", isDark ? "text-slate-300" : "text-slate-600")}>
+                        {group.items.length} product{group.items.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
                   </div>
-                )}
-                <ProductCard
-                  product={product}
-                  inCart={cartIds.has(product.product_id)}
-                  onAdd={addToCart}
-                  onRemove={removeFromCart}
-                  onView={handleProductView}
-                  clickCount={clickCounts[product.product_id] || 0}
-                />
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.items.map((product) => (
+                      <div key={product.product_id} className="relative">
+                        {(clickCounts[product.product_id] || 0) > 0 && (
+                          <div className={cx(
+                            "absolute -right-2 -top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shadow-lg",
+                            isDark ? "bg-orange-400 text-slate-950" : "bg-orange-500 text-white"
+                          )}>
+                            {clickCounts[product.product_id]}
+                          </div>
+                        )}
+                        <ProductCard
+                          product={product}
+                          inCart={cartIds.has(product.product_id)}
+                          onAdd={addToCart}
+                          onRemove={removeFromCart}
+                          onView={handleProductView}
+                          clickCount={clickCounts[product.product_id] || 0}
+                          theme={theme}
+                          categoryTheme={categoryTheme}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+
+            {groupedProducts.length === 0 && (
+              <div className={cx(
+                "rounded-3xl border px-5 py-8 text-center text-sm",
+                isDark ? "border-white/10 bg-white/[0.03] text-slate-300" : "border-slate-200 bg-white/80 text-slate-600"
+              )}>
+                No products found for this category.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
-        <div className="w-72 flex-shrink-0">
-          <div className="sticky top-20 flex flex-col gap-3">
-            <CartPanel
-              cart={cart}
-              removeFromCart={removeFromCart}
-              clearCart={clearCart}
-              onOrderPlaced={() => {
-                showToast("Order sent to Kafka — prices updating!");
-                setTimeout(fetchProducts, 3000);
-              }}
-            />
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-xs text-amber-800">
-              <p className="font-semibold mb-1">Demo tip</p>
-              <p className="leading-relaxed">
-                Click the same product 5–10 times rapidly. Each click fires a Kafka event. The demand consumer detects the spike and the price updates within seconds.
-              </p>
-            </div>
+        <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <CartPanel
+            cart={cart}
+            removeFromCart={removeFromCart}
+            clearCart={clearCart}
+            onOrderPlaced={() => {
+              showToast("Order sent to Kafka - prices updating!");
+              setTimeout(fetchProducts, 3000);
+            }}
+            theme={theme}
+          />
+
+          <div className={cx(
+            "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
+            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+          )}>
+            <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
+              Demo tip
+            </p>
+            <p className={cx("mt-2 text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
+              Click the same product 5 to 10 times rapidly. Each click still emits a demand event and the consumer should push a visible price move within seconds.
+            </p>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

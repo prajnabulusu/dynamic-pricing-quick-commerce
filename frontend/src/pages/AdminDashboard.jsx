@@ -1,57 +1,76 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import {
-  getDashboardStats, getNearExpiry, getRedistribution,
-  getRecentOrders, getAllPrices, simulateSpike,
+  getDashboardStats,
+  getNearExpiry,
+  getRedistribution,
+  getRecentOrders,
+  getAllPrices,
+  simulateSpike,
 } from "../api";
 import axios from "axios";
 
 const api = axios.create({ baseURL: "http://localhost:8000", timeout: 10000 });
-const getWeather         = ()  => api.get("/phase-b/weather");
-const getColdChainAlerts = ()  => api.get("/phase-b/cold-chain/alerts");
-const getSocialImpact    = ()  => api.get("/phase-b/social-impact");
-const getCompetitor      = ()  => api.get("/phase-b/competitor-prices");
-const getPerishableLife  = ()  => api.get("/phase-b/perishable-lifecycle");
+const getWeather = () => api.get("/phase-b/weather");
+const getColdChainAlerts = () => api.get("/phase-b/cold-chain/alerts");
+const getSocialImpact = () => api.get("/phase-b/social-impact");
+const getPerishableLife = () => api.get("/phase-b/perishable-lifecycle");
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, color = "blue" }) {
-  const colors = {
-    blue:   "bg-blue-50   text-blue-700",
-    green:  "bg-green-50  text-green-700",
-    amber:  "bg-amber-50  text-amber-700",
-    red:    "bg-red-50    text-red-700",
-    purple: "bg-purple-50 text-purple-700",
-    teal:   "bg-teal-50   text-teal-700",
+const cx = (...classes) => classes.filter(Boolean).join(" ");
+
+function StatCard({ label, value, sub, accent, theme }) {
+  const isDark = theme === "dark";
+  const tones = {
+    cyan: isDark ? "from-cyan-400/18 to-cyan-500/5 text-cyan-100 ring-cyan-400/15" : "from-cyan-100 to-white text-cyan-900 ring-cyan-100",
+    emerald: isDark ? "from-emerald-400/18 to-emerald-500/5 text-emerald-100 ring-emerald-400/15" : "from-emerald-100 to-white text-emerald-900 ring-emerald-100",
+    amber: isDark ? "from-amber-400/18 to-amber-500/5 text-amber-100 ring-amber-400/15" : "from-amber-100 to-white text-amber-900 ring-amber-100",
+    rose: isDark ? "from-rose-400/18 to-rose-500/5 text-rose-100 ring-rose-400/15" : "from-rose-100 to-white text-rose-900 ring-rose-100",
+    violet: isDark ? "from-violet-400/18 to-violet-500/5 text-violet-100 ring-violet-400/15" : "from-violet-100 to-white text-violet-900 ring-violet-100",
+    teal: isDark ? "from-teal-400/18 to-teal-500/5 text-teal-100 ring-teal-400/15" : "from-teal-100 to-white text-teal-900 ring-teal-100",
   };
+
   return (
-    <div className={`rounded-2xl p-4 ${colors[color]}`}>
-      <p className="text-xs font-medium opacity-70 mb-1">{label}</p>
-      <p className="text-2xl font-bold leading-tight">{value}</p>
-      {sub && <p className="text-xs mt-1 opacity-60">{sub}</p>}
+    <div className={cx(
+      "rounded-[26px] bg-gradient-to-br p-4 ring-1",
+      tones[accent] || tones.cyan
+    )}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-75">{label}</p>
+      <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
+      {sub && <p className="mt-2 text-xs opacity-70">{sub}</p>}
     </div>
   );
 }
 
-function Section({ title, children, right }) {
+function Section({ title, children, right, theme }) {
+  const isDark = theme === "dark";
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
+    <section className={cx(
+      "overflow-hidden rounded-[30px] border shadow-[0_18px_60px_rgba(15,23,42,0.10)]",
+      isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+    )}>
+      <div className={cx(
+        "flex items-center justify-between gap-3 border-b px-5 py-4",
+        isDark ? "border-white/10" : "border-slate-100"
+      )}>
+        <h2 className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>{title}</h2>
         {right}
       </div>
       <div className="p-5">{children}</div>
-    </div>
+    </section>
   );
 }
 
-function SeverityPill({ severity }) {
+function SeverityPill({ severity, theme }) {
+  const isDark = theme === "dark";
   const map = {
-    critical: "bg-red-100 text-red-700 animate-pulse",
-    major:    "bg-orange-100 text-orange-700",
-    minor:    "bg-amber-100 text-amber-700",
-    none:     "bg-green-100 text-green-700",
+    critical: isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700",
+    major: isDark ? "bg-orange-500/15 text-orange-200" : "bg-orange-100 text-orange-700",
+    minor: isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700",
+    none: isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700",
   };
+
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${map[severity] || "bg-gray-100 text-gray-600"}`}>
+    <span className={cx("rounded-full px-2.5 py-1 text-xs font-semibold capitalize", map[severity] || (isDark ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-600"))}>
       {severity}
     </span>
   );
@@ -59,19 +78,28 @@ function SeverityPill({ severity }) {
 
 function WeatherIcon({ weather }) {
   const icons = {
-    "Sunny": "☀", "Hot": "🌡", "Rainy": "🌧", "Heavy Rain": "⛈",
-    "Cloudy": "☁", "Drizzle": "🌦", "Foggy": "🌫", "Humid": "💧",
-    "Monsoon": "🌊", "Smoggy": "😶‍🌫", "Cyclone Warning": "🌀",
+    Sunny: "Sun",
+    Hot: "Heat",
+    Rainy: "Rain",
+    "Heavy Rain": "Storm",
+    Cloudy: "Cloud",
+    Drizzle: "Mist",
+    Foggy: "Fog",
+    Humid: "Humid",
+    Monsoon: "Wave",
+    Smoggy: "Smog",
+    "Cyclone Warning": "Alert",
   };
-  return <span style={{ fontSize: 16 }}>{icons[weather] || "🌤"}</span>;
+
+  return <span className="text-xs font-semibold uppercase tracking-[0.24em] opacity-70">{icons[weather] || "Sky"}</span>;
 }
 
-// ── Spike simulator widget ────────────────────────────────────────────────────
-function SpikeSimulator({ products }) {
+function SpikeSimulator({ products, theme }) {
+  const isDark = theme === "dark";
   const [selectedId, setSelectedId] = useState("");
-  const [count,      setCount]      = useState(20);
-  const [loading,    setLoading]    = useState(false);
-  const [result,     setResult]     = useState(null);
+  const [count, setCount] = useState(20);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
   const run = async () => {
     if (!selectedId) return;
@@ -88,32 +116,47 @@ function SpikeSimulator({ products }) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs text-gray-500 leading-relaxed">
-        Floods Kafka with view events for one product. Watch the price
-        update on the Shop page within 5–10 seconds.
+    <div className="space-y-4">
+      <p className={cx("text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
+        Flood Kafka with synthetic demand for one product and verify that pricing responds on the storefront without changing any backend behavior.
       </p>
-      <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
-          focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <select
+        value={selectedId}
+        onChange={(e) => setSelectedId(e.target.value)}
+        className={cx(
+          "w-full rounded-2xl border px-4 py-3 text-sm outline-none",
+          isDark ? "border-white/10 bg-slate-900/80 text-slate-100" : "border-slate-200 bg-white text-slate-800"
+        )}
+      >
         <option value="">Select a product...</option>
-        {products.map((p) => (
-          <option key={p.product_id} value={p.product_id}>{p.name}</option>
+        {products.map((product) => (
+          <option key={product.product_id} value={product.product_id}>{product.name}</option>
         ))}
       </select>
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-gray-500 w-24">Events: {count}</label>
-        <input type="range" min={5} max={50} step={5} value={count}
-          onChange={(e) => setCount(Number(e.target.value))}
-          className="flex-1" />
+      <div className={cx(
+        "rounded-2xl border px-4 py-4",
+        isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50"
+      )}>
+        <div className="mb-2 flex items-center justify-between text-xs">
+          <span className={isDark ? "text-slate-400" : "text-slate-500"}>Events</span>
+          <span className={cx("font-semibold", isDark ? "text-white" : "text-slate-800")}>{count}</span>
+        </div>
+        <input type="range" min={5} max={50} step={5} value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full accent-cyan-400" />
       </div>
-      <button onClick={run} disabled={loading || !selectedId}
-        className="w-full py-2.5 rounded-xl bg-orange-500 text-white font-medium
-          text-sm hover:bg-orange-600 disabled:opacity-40 transition-colors">
-        {loading ? "Sending spike..." : `Send ${count} demand events →`}
+      <button
+        onClick={run}
+        disabled={loading || !selectedId}
+        className={cx(
+          "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all",
+          isDark
+            ? "bg-orange-400 text-slate-950 hover:bg-orange-300 disabled:bg-slate-800 disabled:text-slate-500"
+            : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+        )}
+      >
+        {loading ? "Sending spike..." : `Send ${count} demand events`}
       </button>
       {result && (
-        <p className={`text-xs font-medium ${result.success ? "text-green-600" : "text-red-500"}`}>
+        <p className={cx("text-xs font-medium", result.success ? (isDark ? "text-emerald-300" : "text-emerald-600") : (isDark ? "text-rose-300" : "text-rose-500"))}>
           {result.msg}
         </p>
       )}
@@ -121,54 +164,55 @@ function SpikeSimulator({ products }) {
   );
 }
 
-// ── Perishable lifecycle table ────────────────────────────────────────────────
-function PerishableLifecycle({ items }) {
+function PerishableLifecycle({ items, theme }) {
+  const isDark = theme === "dark";
   const statusColors = {
-    available:   "bg-green-50  text-green-700",
-    discounting: "bg-amber-50  text-amber-700",
-    dispatched:  "bg-blue-50   text-blue-700",
-    wasted:      "bg-red-50    text-red-700",
+    available: isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700",
+    discounting: isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700",
+    dispatched: isDark ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-100 text-cyan-700",
+    wasted: isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700",
   };
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="text-gray-400 border-b border-gray-100">
-            <th className="pb-2 text-left font-medium">Product</th>
-            <th className="pb-2 text-left font-medium">Batch</th>
-            <th className="pb-2 text-right font-medium">Qty</th>
-            <th className="pb-2 text-right font-medium">Days left</th>
-            <th className="pb-2 text-right font-medium">Discount</th>
-            <th className="pb-2 text-right font-medium">kg saved</th>
-            <th className="pb-2 text-left font-medium pl-3">Status</th>
+          <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
+            <th className="pb-3 text-left font-medium">Product</th>
+            <th className="pb-3 text-left font-medium">Batch</th>
+            <th className="pb-3 text-right font-medium">Qty</th>
+            <th className="pb-3 text-right font-medium">Days left</th>
+            <th className="pb-3 text-right font-medium">Discount</th>
+            <th className="pb-3 text-right font-medium">kg saved</th>
+            <th className="pb-3 pl-3 text-left font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item, i) => (
-            <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-              <td className="py-2 font-medium text-gray-800">{item.product}</td>
-              <td className="py-2 font-mono text-gray-400">{item.batch_code || "—"}</td>
-              <td className="py-2 text-right text-gray-600">{item.quantity}</td>
-              <td className="py-2 text-right">
-                <span className={`font-semibold ${
-                  item.days_left <= 1 ? "text-red-600"
-                  : item.days_left <= 2 ? "text-orange-600"
-                  : "text-gray-600"
-                }`}>{item.days_left}d</span>
+          {items.map((item, index) => (
+            <tr key={index} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/80")}>
+              <td className={cx("py-3 font-medium", isDark ? "text-slate-100" : "text-slate-800")}>{item.product}</td>
+              <td className={cx("py-3 font-mono text-xs", isDark ? "text-slate-400" : "text-slate-400")}>{item.batch_code || "-"}</td>
+              <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{item.quantity}</td>
+              <td className="py-3 text-right">
+                <span className={cx(
+                  "font-semibold",
+                  item.days_left <= 1 ? (isDark ? "text-rose-300" : "text-rose-600") : item.days_left <= 2 ? (isDark ? "text-orange-200" : "text-orange-600") : (isDark ? "text-slate-300" : "text-slate-600")
+                )}>
+                  {item.days_left}d
+                </span>
               </td>
-              <td className="py-2 text-right">
-                {item.discount_pct > 0
-                  ? <span className="text-green-600 font-medium">-{item.discount_pct}%</span>
-                  : <span className="text-gray-400">—</span>
-                }
+              <td className="py-3 text-right">
+                {item.discount_pct > 0 ? (
+                  <span className={cx("font-semibold", isDark ? "text-emerald-300" : "text-emerald-600")}>-{item.discount_pct}%</span>
+                ) : (
+                  <span className={isDark ? "text-slate-500" : "text-slate-400"}>-</span>
+                )}
               </td>
-              <td className="py-2 text-right text-teal-600 font-medium">
-                {item.kg_saved > 0 ? `${item.kg_saved}kg` : "—"}
+              <td className={cx("py-3 text-right font-medium", isDark ? "text-teal-200" : "text-teal-600")}>
+                {item.kg_saved > 0 ? `${item.kg_saved}kg` : "-"}
               </td>
-              <td className="py-2 pl-3">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full
-                  ${statusColors[item.status] || "bg-gray-100 text-gray-600"}`}>
+              <td className="py-3 pl-3">
+                <span className={cx("rounded-full px-2.5 py-1 text-xs font-semibold", statusColors[item.status] || (isDark ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-600"))}>
                   {item.status}
                 </span>
               </td>
@@ -180,36 +224,47 @@ function PerishableLifecycle({ items }) {
   );
 }
 
-// ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function AdminDashboard() {
-  const [stats,      setStats]      = useState(null);
-  const [expiry,     setExpiry]     = useState([]);
-  const [redistrib,  setRedistrib]  = useState([]);
-  const [orders,     setOrders]     = useState([]);
-  const [prices,     setPrices]     = useState([]);
-  const [weather,    setWeather]    = useState([]);
+function EmptyState({ message, theme }) {
+  return <p className={cx("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>{message}</p>;
+}
+
+export default function AdminDashboard({ theme }) {
+  const isDark = theme === "dark";
+  const [stats, setStats] = useState(null);
+  const [expiry, setExpiry] = useState([]);
+  const [redistrib, setRedistrib] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [prices, setPrices] = useState([]);
+  const [weather, setWeather] = useState([]);
   const [coldAlerts, setColdAlerts] = useState([]);
-  const [impact,     setImpact]     = useState(null);
+  const [impact, setImpact] = useState(null);
   const [perishLife, setPerishLife] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [lastRefresh,setLastRefresh]= useState(null);
-  const [activeTab,  setActiveTab]  = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const fetchAll = useCallback(async () => {
-    const [s,e,r,o,p,w,ca,si,pl] = await Promise.allSettled([
-      getDashboardStats(), getNearExpiry(), getRedistribution(),
-      getRecentOrders(), getAllPrices(), getWeather(),
-      getColdChainAlerts(), getSocialImpact(), getPerishableLife(),
+    const [s, e, r, o, p, w, ca, si, pl] = await Promise.allSettled([
+      getDashboardStats(),
+      getNearExpiry(),
+      getRedistribution(),
+      getRecentOrders(),
+      getAllPrices(),
+      getWeather(),
+      getColdChainAlerts(),
+      getSocialImpact(),
+      getPerishableLife(),
     ]);
-    if (s.status==="fulfilled") setStats(s.value.data);
-    if (e.status==="fulfilled") setExpiry(e.value.data);
-    if (r.status==="fulfilled") setRedistrib(r.value.data);
-    if (o.status==="fulfilled") setOrders(o.value.data);
-    if (p.status==="fulfilled") setPrices(p.value.data);
-    if (w.status==="fulfilled") setWeather(w.value.data);
-    if (ca.status==="fulfilled") setColdAlerts(ca.value.data);
-    if (si.status==="fulfilled") setImpact(si.value.data);
-    if (pl.status==="fulfilled") setPerishLife(pl.value.data);
+
+    if (s.status === "fulfilled") setStats(s.value.data);
+    if (e.status === "fulfilled") setExpiry(e.value.data);
+    if (r.status === "fulfilled") setRedistrib(r.value.data);
+    if (o.status === "fulfilled") setOrders(o.value.data);
+    if (p.status === "fulfilled") setPrices(p.value.data);
+    if (w.status === "fulfilled") setWeather(w.value.data);
+    if (ca.status === "fulfilled") setColdAlerts(ca.value.data);
+    if (si.status === "fulfilled") setImpact(si.value.data);
+    if (pl.status === "fulfilled") setPerishLife(pl.value.data);
     setLastRefresh(new Date());
     setLoading(false);
   }, []);
@@ -221,153 +276,188 @@ export default function AdminDashboard() {
   }, [fetchAll]);
 
   const tabs = [
-    { id: "overview",   label: "Overview" },
-    { id: "pricing",    label: "Live Pricing" },
+    { id: "overview", label: "Overview" },
+    { id: "pricing", label: "Live Pricing" },
     { id: "perishable", label: "Perishable" },
-    { id: "weather",    label: "Weather & Events" },
-    { id: "coldchain",  label: "Cold Chain" },
-    { id: "impact",     label: "Social Impact" },
-    { id: "simulator",  label: "Spike Simulator" },
+    { id: "weather", label: "Weather" },
+    { id: "coldchain", label: "Cold Chain" },
+    { id: "impact", label: "Impact" },
+    { id: "simulator", label: "Simulator" },
   ];
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className={cx("h-8 w-8 animate-spin rounded-full border-2 border-t-transparent", isDark ? "border-cyan-300" : "border-slate-900")} />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Auto-refreshes every 20s{lastRefresh && ` · ${lastRefresh.toLocaleTimeString()}`}
-          </p>
+    <div className="mx-auto max-w-7xl px-4 py-8">
+      <section className={cx(
+        "overflow-hidden rounded-[34px] border p-6 shadow-[0_20px_70px_rgba(15,23,42,0.10)]",
+        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+      )}>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-end">
+          <div>
+            <span className={cx(
+              "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
+              isDark ? "bg-violet-400/12 text-violet-200" : "bg-violet-50 text-violet-700"
+            )}>
+              Admin control plane
+            </span>
+            <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
+              Operational pricing, freshness, and event visibility
+            </h1>
+            <p className={cx("mt-3 max-w-3xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
+              The dashboard keeps the same live data, but now presents it with clearer grouping, stronger contrast, and a full dark mode designed for long sessions.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
+              <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Refresh</p>
+              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>20 sec</p>
+            </div>
+            <div className={cx("rounded-2xl border px-4 py-4", isDark ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-slate-50")}>
+              <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>Updated</p>
+              <p className={cx("mt-2 text-lg font-black", isDark ? "text-white" : "text-slate-900")}>
+                {lastRefresh ? lastRefresh.toLocaleTimeString() : "--"}
+              </p>
+            </div>
+          </div>
         </div>
-        <button onClick={fetchAll} className="text-xs text-blue-600 hover:underline">
+
+        {coldAlerts.length > 0 && (
+          <div className={cx(
+            "mt-6 flex items-start gap-4 rounded-2xl border px-4 py-4",
+            isDark ? "border-rose-400/15 bg-rose-500/10" : "border-rose-100 bg-rose-50"
+          )}>
+            <div className={cx("mt-1 h-2.5 w-2.5 rounded-full", isDark ? "bg-rose-300" : "bg-rose-500")} />
+            <div>
+              <p className={cx("text-sm font-semibold", isDark ? "text-rose-100" : "text-rose-700")}>
+                {coldAlerts.length} cold chain breach{coldAlerts.length > 1 ? "es" : ""} detected
+              </p>
+              <p className={cx("mt-1 text-xs", isDark ? "text-rose-200/80" : "text-rose-600")}>
+                {coldAlerts.filter((item) => item.severity === "critical").length} critical and {coldAlerts.filter((item) => item.severity === "major").length} major alerts are currently active.
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <div className={cx(
+        "mt-6 flex flex-wrap gap-2 rounded-[26px] border p-2",
+        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/80"
+      )}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cx(
+              "rounded-2xl px-4 py-2 text-xs font-semibold transition-all",
+              activeTab === tab.id
+                ? isDark ? "bg-cyan-400 text-slate-950" : "bg-slate-900 text-white"
+                : isDark ? "text-slate-300 hover:bg-white/[0.06]" : "text-slate-600 hover:bg-slate-100"
+            )}
+          >
+            {tab.label}
+            {tab.id === "coldchain" && coldAlerts.length > 0 && (
+              <span className={cx("ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold", isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700")}>
+                {coldAlerts.length}
+              </span>
+            )}
+          </button>
+        ))}
+        <button onClick={fetchAll} className={cx("ml-auto rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
           Refresh now
         </button>
       </div>
 
-      {/* Cold chain alert banner */}
-      {coldAlerts.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4
-          flex items-start gap-3">
-          <span className="text-red-500 font-bold text-sm mt-0.5">!</span>
-          <div>
-            <p className="text-sm font-semibold text-red-700">
-              {coldAlerts.length} cold chain breach{coldAlerts.length > 1 ? "es" : ""} detected
-            </p>
-            <p className="text-xs text-red-500 mt-0.5">
-              {coldAlerts.filter(a=>a.severity==="critical").length} critical ·{" "}
-              {coldAlerts.filter(a=>a.severity==="major").length} major.
-              Emergency discounts applied automatically.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Tab nav */}
-      <div className="flex gap-1 flex-wrap mb-5 bg-gray-100 p-1 rounded-xl">
-        {tabs.map((t) => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              activeTab === t.id
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}>
-            {t.label}
-            {t.id === "coldchain" && coldAlerts.length > 0 && (
-              <span className="ml-1.5 bg-red-500 text-white text-xs rounded-full
-                px-1.5 py-0.5">{coldAlerts.length}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Overview tab ── */}
       {activeTab === "overview" && (
-        <div className="space-y-5">
+        <div className="mt-6 space-y-6">
           {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <StatCard label="Orders today" value={stats.total_orders_today.toLocaleString()} color="blue" />
-              <StatCard label="Revenue today" value={`₹${stats.total_revenue_today.toLocaleString("en-IN",{maximumFractionDigits:0})}`} color="green" />
-              <StatCard label="Avg demand" value={`${Math.round(stats.avg_demand_score*100)}%`} color="purple" />
-              <StatCard label="Low stock" value={stats.low_stock_products} sub="below reorder level" color={stats.low_stock_products>0?"amber":"green"} />
-              <StatCard label="Near expiry" value={stats.near_expiry_products} sub="within 3 days" color={stats.near_expiry_products>0?"red":"green"} />
-              <StatCard label="Pending dispatch" value={stats.pending_redistributions} color={stats.pending_redistributions>0?"amber":"green"} />
-              {impact && <StatCard label="Food saved" value={`${impact.total_kg_saved}kg`} sub="from waste" color="teal" />}
-              {impact && <StatCard label="CO₂ offset" value={`${impact.co2_offset_kg}kg`} color="green" />}
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard label="Orders today" value={stats.total_orders_today.toLocaleString()} accent="cyan" theme={theme} />
+              <StatCard label="Revenue today" value={`Rs. ${stats.total_revenue_today.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} accent="emerald" theme={theme} />
+              <StatCard label="Avg demand" value={`${Math.round(stats.avg_demand_score * 100)}%`} accent="violet" theme={theme} />
+              <StatCard label="Low stock" value={stats.low_stock_products} sub="below reorder level" accent={stats.low_stock_products > 0 ? "amber" : "emerald"} theme={theme} />
+              <StatCard label="Near expiry" value={stats.near_expiry_products} sub="within 3 days" accent={stats.near_expiry_products > 0 ? "rose" : "emerald"} theme={theme} />
+              <StatCard label="Pending dispatch" value={stats.pending_redistributions} accent={stats.pending_redistributions > 0 ? "amber" : "emerald"} theme={theme} />
+              {impact && <StatCard label="Food saved" value={`${impact.total_kg_saved}kg`} sub="rescued from waste" accent="teal" theme={theme} />}
+              {impact && <StatCard label="CO2 offset" value={`${impact.co2_offset_kg}kg`} accent="emerald" theme={theme} />}
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Section title={`Near-expiry alerts (${expiry.length})`}>
-              {expiry.length === 0
-                ? <p className="text-sm text-gray-400">No near-expiry items.</p>
-                : expiry.map((item) => (
-                  <div key={item.product_id} className="flex items-center justify-between
-                    py-2 border-b border-gray-50 last:border-0">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Section title={`Near-expiry alerts (${expiry.length})`} theme={theme}>
+              <div className="space-y-3">
+                {expiry.length === 0 ? <EmptyState message="No near-expiry items." theme={theme} /> : expiry.map((item) => (
+                  <div key={item.product_id} className={cx("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3", isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/70")}>
                     <div>
-                      <p className="font-medium text-sm text-gray-800">{item.product_name}</p>
-                      <p className="text-xs text-gray-400">{item.quantity} units · {item.expiry_date}</p>
+                      <p className={cx("text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{item.product_name}</p>
+                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{item.quantity} units · {item.expiry_date}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-700">₹{item.current_price.toFixed(2)}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        item.days_left<=1?"bg-red-100 text-red-700":item.days_left<=2?"bg-orange-100 text-orange-700":"bg-amber-100 text-amber-700"
-                      }`}>{item.days_left}d</span>
+                    <div className="text-right">
+                      <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>Rs. {item.current_price.toFixed(2)}</p>
+                      <span className={cx(
+                        "mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold",
+                        item.days_left <= 1 ? (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700") : item.days_left <= 2 ? (isDark ? "bg-orange-500/15 text-orange-200" : "bg-orange-100 text-orange-700") : (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700")
+                      )}>
+                        {item.days_left}d
+                      </span>
                     </div>
                   </div>
-                ))
-              }
+                ))}
+              </div>
             </Section>
 
-            <Section title={`Redistribution (${redistrib.length})`}>
-              {redistrib.length === 0
-                ? <p className="text-sm text-gray-400">No requests yet.</p>
-                : redistrib.map((r) => (
-                  <div key={r.request_id} className="flex items-center justify-between
-                    py-2 border-b border-gray-50 last:border-0">
+            <Section title={`Redistribution (${redistrib.length})`} theme={theme}>
+              <div className="space-y-3">
+                {redistrib.length === 0 ? <EmptyState message="No requests yet." theme={theme} /> : redistrib.map((item) => (
+                  <div key={item.request_id} className={cx("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3", isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/70")}>
                     <div>
-                      <p className="font-medium text-sm text-gray-800">{r.product_name}</p>
-                      <p className="text-xs text-gray-400">{r.quantity} units · {r.partner_name||"unassigned"}</p>
+                      <p className={cx("text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{item.product_name}</p>
+                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{item.quantity} units · {item.partner_name || "unassigned"}</p>
                     </div>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      {pending:"bg-amber-100 text-amber-700",accepted:"bg-blue-100 text-blue-700",
-                       completed:"bg-green-100 text-green-700",in_transit:"bg-purple-100 text-purple-700"}
-                      [r.status]||"bg-gray-100 text-gray-600"}`}>
-                      {r.status.replace("_"," ")}
+                    <span className={cx(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
+                      {
+                        pending: isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700",
+                        accepted: isDark ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-100 text-cyan-700",
+                        completed: isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700",
+                        in_transit: isDark ? "bg-violet-500/15 text-violet-200" : "bg-violet-100 text-violet-700",
+                      }[item.status] || (isDark ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-600")
+                    )}>
+                      {item.status.replace("_", " ")}
                     </span>
                   </div>
-                ))
-              }
+                ))}
+              </div>
             </Section>
           </div>
 
-          {/* Recent orders */}
-          <Section title="Recent orders">
+          <Section title="Recent orders" theme={theme}>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
-                  <tr className="text-xs text-gray-400 border-b border-gray-100">
-                    <th className="pb-2 text-left font-medium">Order</th>
-                    <th className="pb-2 text-left font-medium">Time</th>
-                    <th className="pb-2 text-left font-medium">City</th>
-                    <th className="pb-2 text-right font-medium">Items</th>
-                    <th className="pb-2 text-right font-medium">Amount</th>
+                  <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
+                    <th className="pb-3 text-left font-medium">Order</th>
+                    <th className="pb-3 text-left font-medium">Time</th>
+                    <th className="pb-3 text-left font-medium">City</th>
+                    <th className="pb-3 text-right font-medium">Items</th>
+                    <th className="pb-3 text-right font-medium">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o) => (
-                    <tr key={o.order_id} className="border-b border-gray-50 last:border-0">
-                      <td className="py-2 font-mono text-gray-400 text-xs">#{String(o.order_id).padStart(5,"0")}</td>
-                      <td className="py-2 text-xs text-gray-600">{new Date(o.timestamp).toLocaleTimeString()}</td>
-                      <td className="py-2 text-gray-600">{o.city||"—"}</td>
-                      <td className="py-2 text-right text-gray-600">{o.item_count}</td>
-                      <td className="py-2 text-right font-semibold text-gray-800">₹{o.total_amount.toFixed(2)}</td>
+                  {orders.map((order) => (
+                    <tr key={order.order_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                      <td className={cx("py-3 font-mono text-xs", isDark ? "text-slate-400" : "text-slate-400")}>#{String(order.order_id).padStart(5, "0")}</td>
+                      <td className={cx("py-3 text-xs", isDark ? "text-slate-300" : "text-slate-600")}>{new Date(order.timestamp).toLocaleTimeString()}</td>
+                      <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{order.city || "-"}</td>
+                      <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{order.item_count}</td>
+                      <td className={cx("py-3 text-right font-semibold", isDark ? "text-white" : "text-slate-800")}>Rs. {order.total_amount.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -377,128 +467,119 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ── Live pricing tab ── */}
       {activeTab === "pricing" && (
-        <Section title="Live pricing — all products">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-gray-400 border-b border-gray-100">
-                  <th className="pb-2 text-left font-medium">Product</th>
-                  <th className="pb-2 text-right font-medium">Base</th>
-                  <th className="pb-2 text-right font-medium">Current</th>
-                  <th className="pb-2 text-right font-medium">Demand</th>
-                  <th className="pb-2 text-left pl-3 font-medium">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prices.map((p) => {
-                  const up = p.recommended_price > p.base_price;
-                  const dn = p.recommended_price < p.base_price;
-                  return (
-                    <tr key={p.product_id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                      <td className="py-2.5 font-medium text-gray-800">{p.name}</td>
-                      <td className="py-2.5 text-right text-gray-400">₹{p.base_price.toFixed(2)}</td>
-                      <td className="py-2.5 text-right">
-                        <span className={`font-semibold ${up?"text-red-600":dn?"text-green-600":"text-gray-700"}`}>
-                          {up?"▲":dn?"▼":"─"} ₹{p.recommended_price.toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${p.demand_score>0.7?"bg-red-400":p.demand_score>0.4?"bg-amber-400":"bg-green-400"}`}
-                              style={{width:`${Math.round(p.demand_score*100)}%`}} />
+        <div className="mt-6">
+          <Section title="Live pricing - all products" theme={theme}>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
+                    <th className="pb-3 text-left font-medium">Product</th>
+                    <th className="pb-3 text-right font-medium">Base</th>
+                    <th className="pb-3 text-right font-medium">Current</th>
+                    <th className="pb-3 text-right font-medium">Demand</th>
+                    <th className="pb-3 pl-3 text-left font-medium">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prices.map((product) => {
+                    const up = product.recommended_price > product.base_price;
+                    const down = product.recommended_price < product.base_price;
+                    return (
+                      <tr key={product.product_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                        <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{product.name}</td>
+                        <td className={cx("py-3 text-right", isDark ? "text-slate-400" : "text-slate-400")}>Rs. {product.base_price.toFixed(2)}</td>
+                        <td className="py-3 text-right">
+                          <span className={cx("font-semibold", up ? (isDark ? "text-rose-300" : "text-rose-600") : down ? (isDark ? "text-emerald-300" : "text-emerald-600") : (isDark ? "text-slate-200" : "text-slate-700"))}>
+                            {up ? "UP" : down ? "DOWN" : "FLAT"} Rs. {product.recommended_price.toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className={cx("h-2 w-20 overflow-hidden rounded-full", isDark ? "bg-slate-800" : "bg-slate-100")}>
+                              <div className={cx("h-full rounded-full", product.demand_score > 0.7 ? "bg-rose-400" : product.demand_score > 0.4 ? "bg-amber-400" : "bg-emerald-400")} style={{ width: `${Math.round(product.demand_score * 100)}%` }} />
+                            </div>
+                            <span className={cx("w-9 text-right text-xs", isDark ? "text-slate-400" : "text-slate-400")}>{Math.round(product.demand_score * 100)}%</span>
                           </div>
-                          <span className="text-xs text-gray-400 w-7 text-right">{Math.round(p.demand_score*100)}%</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 pl-3 text-xs text-gray-400 max-w-xs truncate">{p.price_reason}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Section>
+                        </td>
+                        <td className={cx("max-w-xs py-3 pl-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{product.price_reason}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        </div>
       )}
 
-      {/* ── Perishable lifecycle tab ── */}
       {activeTab === "perishable" && (
-        <Section title="Perishable batch lifecycle">
-          {perishLife.length === 0
-            ? <p className="text-sm text-gray-400">No perishable batch data yet.</p>
-            : <PerishableLifecycle items={perishLife} />
-          }
-        </Section>
+        <div className="mt-6">
+          <Section title="Perishable batch lifecycle" theme={theme}>
+            {perishLife.length === 0 ? <EmptyState message="No perishable batch data yet." theme={theme} /> : <PerishableLifecycle items={perishLife} theme={theme} />}
+          </Section>
+        </div>
       )}
 
-      {/* ── Weather & events tab ── */}
       {activeTab === "weather" && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {weather.map((w) => (
-              <div key={w.city} className="bg-white border border-gray-100 rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-900">{w.city}</span>
-                  <WeatherIcon weather={w.weather} />
+        <div className="mt-6 space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {weather.map((item) => (
+              <div key={item.city} className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>{item.city}</p>
+                    <p className={cx("mt-1 text-sm", isDark ? "text-slate-400" : "text-slate-500")}>{item.weather}</p>
+                  </div>
+                  <WeatherIcon weather={item.weather} />
                 </div>
-                <p className="text-2xl font-bold text-gray-800">
-                  {w.temperature ? `${w.temperature}°C` : "—"}
+                <p className={cx("mt-5 text-4xl font-black tracking-tight", isDark ? "text-white" : "text-slate-900")}>
+                  {item.temperature ? `${item.temperature} C` : "-"}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">{w.weather}</p>
-                {w.rain_intensity > 0 && (
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>Rain intensity</span>
-                      <span>{w.rain_intensity}/10</span>
+                {item.rain_intensity > 0 && (
+                  <div className="mt-4">
+                    <div className="mb-2 flex justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Rain intensity</span>
+                      <span className={cx("font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>{item.rain_intensity}/10</span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-400 rounded-full"
-                        style={{width:`${w.rain_intensity*10}%`}} />
+                    <div className={cx("h-2 overflow-hidden rounded-full", isDark ? "bg-slate-800" : "bg-slate-100")}>
+                      <div className="h-full rounded-full bg-cyan-400" style={{ width: `${item.rain_intensity * 10}%` }} />
                     </div>
                   </div>
                 )}
-                {w.event_name && (
-                  <div className="mt-2 bg-purple-50 text-purple-700 text-xs font-medium
-                    px-2 py-1 rounded-lg">
-                    {w.event_name} · ×{w.demand_multiplier} demand
+                {item.event_name && (
+                  <div className={cx("mt-4 rounded-2xl px-3 py-2 text-xs font-semibold", isDark ? "bg-violet-400/12 text-violet-200" : "bg-violet-50 text-violet-700")}>
+                    {item.event_name} · x{item.demand_multiplier} demand
                   </div>
                 )}
               </div>
             ))}
           </div>
           {weather.length === 0 && (
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-700">
-              No weather data yet. Run: <code className="bg-amber-100 px-1 rounded">python scripts/weather_events_simulator.py</code>
+            <div className={cx("rounded-2xl border px-4 py-4 text-sm", isDark ? "border-amber-400/15 bg-amber-500/10 text-amber-200" : "border-amber-100 bg-amber-50 text-amber-700")}>
+              No weather data yet. Run <code>python scripts/weather_events_simulator.py</code>.
             </div>
           )}
         </div>
       )}
 
-      {/* ── Cold chain tab ── */}
       {activeTab === "coldchain" && (
-        <div className="space-y-5">
+        <div className="mt-6 space-y-6">
           {coldAlerts.length > 0 && (
-            <Section title="Active breach alerts">
-              <div className="flex flex-col gap-3">
-                {coldAlerts.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between py-2
-                    border-b border-gray-50 last:border-0">
+            <Section title="Active breach alerts" theme={theme}>
+              <div className="space-y-3">
+                {coldAlerts.map((alert, index) => (
+                  <div key={index} className={cx("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3", isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/70")}>
                     <div>
-                      <p className="font-medium text-sm text-gray-800">{a.product}</p>
-                      <p className="text-xs text-gray-400">{a.store} · {a.city}</p>
+                      <p className={cx("text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{alert.product}</p>
+                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{alert.store} · {alert.city}</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-red-600">
-                          {a.actual_temp}°C
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          required ≤{a.required_temp}°C
-                        </p>
+                        <p className={cx("text-sm font-semibold", isDark ? "text-rose-300" : "text-rose-600")}>{alert.actual_temp} C</p>
+                        <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>required {"<="} {alert.required_temp} C</p>
                       </div>
-                      <SeverityPill severity={a.severity} />
+                      <SeverityPill severity={alert.severity} theme={theme} />
                     </div>
                   </div>
                 ))}
@@ -506,41 +587,39 @@ export default function AdminDashboard() {
             </Section>
           )}
           {coldAlerts.length === 0 && (
-            <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-sm text-green-700">
-              No active cold chain breaches. All products within temperature range.
+            <div className={cx("rounded-2xl border px-4 py-4 text-sm", isDark ? "border-emerald-400/15 bg-emerald-500/10 text-emerald-200" : "border-emerald-100 bg-emerald-50 text-emerald-700")}>
+              No active cold chain breaches. All products are within range.
             </div>
           )}
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-700">
-            Run <code className="bg-amber-100 px-1 rounded">python scripts/cold_chain_monitor.py</code> to start continuous temperature monitoring.
+          <div className={cx("rounded-2xl border px-4 py-4 text-xs leading-6", isDark ? "border-amber-400/15 bg-amber-500/10 text-amber-200" : "border-amber-100 bg-amber-50 text-amber-700")}>
+            Run <code>python scripts/cold_chain_monitor.py</code> to keep continuous temperature monitoring active.
           </div>
         </div>
       )}
 
-      {/* ── Social impact tab ── */}
       {activeTab === "impact" && impact && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <StatCard label="Food saved" value={`${impact.total_kg_saved}kg`} sub="from landfill" color="green" />
-            <StatCard label="CO₂ offset" value={`${impact.co2_offset_kg}kg`} sub="carbon equivalent" color="teal" />
-            <StatCard label="Meals provided" value={impact.meals_equivalent.toLocaleString()} sub="≈400g per meal" color="purple" />
-            <StatCard label="NGO dispatches" value={impact.total_dispatches} color="blue" />
-            <StatCard label="Partners active" value={impact.partners_used} color="blue" />
-            <StatCard label="Revenue recovered" value={`₹${impact.revenue_recovered.toLocaleString("en-IN",{maximumFractionDigits:0})}`} sub="from near-expiry sales" color="amber" />
+        <div className="mt-6 space-y-6">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <StatCard label="Food saved" value={`${impact.total_kg_saved}kg`} sub="from landfill" accent="emerald" theme={theme} />
+            <StatCard label="CO2 offset" value={`${impact.co2_offset_kg}kg`} sub="carbon equivalent" accent="teal" theme={theme} />
+            <StatCard label="Meals provided" value={impact.meals_equivalent.toLocaleString()} sub="about 400g each" accent="violet" theme={theme} />
+            <StatCard label="NGO dispatches" value={impact.total_dispatches} accent="cyan" theme={theme} />
+            <StatCard label="Partners active" value={impact.partners_used} accent="cyan" theme={theme} />
+            <StatCard label="Recovered revenue" value={`Rs. ${impact.revenue_recovered.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} accent="amber" theme={theme} />
           </div>
 
           {impact.partners.length > 0 && (
-            <Section title="Partner breakdown">
-              <div className="flex flex-col gap-3">
-                {impact.partners.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between py-2
-                    border-b border-gray-50 last:border-0">
+            <Section title="Partner breakdown" theme={theme}>
+              <div className="space-y-3">
+                {impact.partners.map((partner, index) => (
+                  <div key={index} className={cx("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3", isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/70")}>
                     <div>
-                      <p className="font-medium text-sm text-gray-800">{p.name}</p>
-                      <p className="text-xs text-gray-400">{p.type}</p>
+                      <p className={cx("text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{partner.name}</p>
+                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{partner.type}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-sm text-gray-700">{p.units} units</p>
-                      <p className="text-xs text-gray-400">{p.dispatches} dispatches</p>
+                      <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{partner.units} units</p>
+                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{partner.dispatches} dispatches</p>
                     </div>
                   </div>
                 ))}
@@ -550,18 +629,22 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ── Spike simulator tab ── */}
       {activeTab === "simulator" && (
-        <div className="max-w-md">
-          <Section title="Demand spike simulator">
-            <SpikeSimulator products={prices.map(p=>({product_id:p.product_id,name:p.name}))} />
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <Section title="Demand spike simulator" theme={theme}>
+            <SpikeSimulator products={prices.map((product) => ({ product_id: product.product_id, name: product.name }))} theme={theme} />
           </Section>
-          <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-700 leading-relaxed">
-            <p className="font-semibold mb-1">How it works</p>
-            <p>The simulator calls <code className="bg-blue-100 px-1 rounded">/events/spike-simulator/{"{id}"}</code> which floods the <code className="bg-blue-100 px-1 rounded">demand_events</code> Kafka topic. The demand consumer detects the spike (≥5 events/5min) and triggers the pricing engine. Switch to the Shop page to watch the price update in real time.</p>
+          <div className={cx("rounded-[30px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+            <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>How it works</p>
+            <p className={cx("mt-3 text-sm leading-7", isDark ? "text-slate-300" : "text-slate-600")}>
+              The simulator calls <code>/events/spike-simulator/{"{id}"}</code>, which floods the <code>demand_events</code> Kafka topic. The demand consumer detects the spike at &gt;= 5 events within 5 minutes and triggers repricing. Switch to the shop page to watch the updated price surface there.
+            </p>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+
+
