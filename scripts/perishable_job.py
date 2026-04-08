@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import schedule
 import time
 import psycopg2
-from datetime import date
+from datetime import date, datetime
 from config import settings
 
 
@@ -21,6 +21,24 @@ def get_conn():
         password=settings.db_password,
         host=settings.db_host, port=settings.db_port,
     )
+
+
+def normalize_to_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def resolve_days_left(expiry_date, raw_days_left):
+    if raw_days_left is not None:
+        days_attr = getattr(raw_days_left, "days", None)
+        if days_attr is not None:
+            return days_attr
+        if isinstance(raw_days_left, int):
+            return raw_days_left
+
+    normalized_expiry = normalize_to_date(expiry_date)
+    return (normalized_expiry - date.today()).days
 
 
 def run_perishable_check():
@@ -62,9 +80,10 @@ def run_perishable_check():
         batch_id, product_id, warehouse_id, quantity, expiry_date, \
             days_left, name, base_price, cost_price = row
 
+        expiry_date = normalize_to_date(expiry_date)
         base_price  = float(base_price)
         cost_price  = float(cost_price)
-
+        days_left   = resolve_days_left(expiry_date, days_left)
         # ── Determine discount depth based on days remaining ─────────────────
         if days_left <= 0:
             expiry_factor = 0.50

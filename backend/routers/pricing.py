@@ -161,7 +161,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         SELECT p.name
         FROM price_history ph
         JOIN products p ON ph.product_id = p.product_id
-        WHERE ph.timestamp::date = CURRENT_DATE
+        WHERE ph.created_at::date = CURRENT_DATE
         GROUP BY p.name
         ORDER BY AVG(ABS(ph.new_price - ph.old_price)) DESC
         LIMIT 1;
@@ -187,7 +187,7 @@ def get_near_expiry(db: Session = Depends(get_db)):
         SELECT
             pb.product_id,
             p.name,
-            (pb.expiry_date - CURRENT_DATE)::int AS days_left,
+            (pb.expiry_date::date - CURRENT_DATE) AS days_left,
             pb.quantity,
             pb.expiry_date::text,
             COALESCE(
@@ -232,7 +232,7 @@ def get_redistribution(db: Session = Depends(get_db)):
         JOIN products p ON rr.product_id = p.product_id
         LEFT JOIN redistribution_dispatch rd ON rr.request_id = rd.request_id
         LEFT JOIN redistribution_partners rp ON rd.partner_id  = rp.partner_id
-        ORDER BY rr.created_at DESC
+        ORDER BY rr.request_id DESC
         LIMIT 20;
     """)).fetchall()
 
@@ -295,12 +295,12 @@ def get_animal_shelter_routing(db: Session = Depends(get_db)):
                 p.name AS product_name,
                 c.category_name,
                 pb.quantity,
-                (pb.expiry_date - CURRENT_DATE)::int AS days_left,
-                COALESCE(w.location, 'Unknown') AS warehouse_city
+                (pb.expiry_date::date - CURRENT_DATE) AS days_left,
+                COALESCE(ds.city, 'Unknown') AS warehouse_city
             FROM perishable_batches pb
             JOIN products p   ON pb.product_id = p.product_id
             JOIN categories c ON p.category_id = c.category_id
-            LEFT JOIN warehouses w ON pb.warehouse_id = w.warehouse_id
+            LEFT JOIN dark_stores ds ON pb.warehouse_id = ds.store_id
             WHERE p.is_perishable = TRUE
               AND c.category_name IN ('Fruits', 'Vegetables')
               AND pb.expiry_date >= CURRENT_DATE
@@ -317,28 +317,18 @@ def get_animal_shelter_routing(db: Session = Depends(get_db)):
             c.warehouse_city,
             s.partner_id,
             s.name AS shelter_name,
-            s.location AS shelter_city,
-            s.contact_details,
+            'Unknown' AS shelter_city,
+            NULL::text AS contact_details,
             s.capacity,
-            CASE
-                WHEN LOWER(COALESCE(s.location, '')) = LOWER(COALESCE(c.warehouse_city, '')) THEN 'same_city'
-                ELSE 'fallback_capacity'
-            END AS match_type
+            'capacity_fallback' AS match_type
         FROM candidates c
         JOIN LATERAL (
             SELECT
                 rp.partner_id,
                 rp.name,
-                rp.location,
-                rp.contact_details,
                 rp.capacity
             FROM redistribution_partners rp
-            WHERE rp.type = 'animal_shelter'
             ORDER BY
-                CASE
-                    WHEN LOWER(COALESCE(rp.location, '')) = LOWER(COALESCE(c.warehouse_city, '')) THEN 0
-                    ELSE 1
-                END,
                 rp.capacity DESC,
                 rp.partner_id ASC
             LIMIT 1
@@ -422,12 +412,12 @@ def get_rescue_routing(db: Session = Depends(get_db)):
             c.category_name,
             pb.quantity,
             pb.expiry_date::text AS expiry_date,
-            (pb.expiry_date - CURRENT_DATE)::int AS days_left,
-            COALESCE(w.location, 'Unknown') AS warehouse_city
+            (pb.expiry_date::date - CURRENT_DATE) AS days_left,
+            COALESCE(ds.city, 'Unknown') AS warehouse_city
         FROM perishable_batches pb
         JOIN products p   ON pb.product_id = p.product_id
         JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN warehouses w ON pb.warehouse_id = w.warehouse_id
+        LEFT JOIN dark_stores ds ON pb.warehouse_id = ds.store_id
         WHERE p.is_perishable = TRUE
           AND pb.quantity > 0
           AND pb.expiry_date <= CURRENT_DATE + INTERVAL '3 days'
@@ -439,9 +429,6 @@ def get_rescue_routing(db: Session = Depends(get_db)):
         SELECT
             partner_id,
             name,
-            type,
-            location,
-            contact_details,
             capacity
         FROM redistribution_partners
         ORDER BY capacity DESC, partner_id ASC;
@@ -473,23 +460,10 @@ def get_rescue_routing(db: Session = Depends(get_db)):
             }
 
     partner_groups = {
-        "animal_shelter": [],
-        "ngo_orphanage": [],
-        "compost_biogas": [],
+        "animal_shelter": list(partner_rows),
+        "ngo_orphanage": list(partner_rows),
+        "compost_biogas": list(partner_rows),
     }
-
-    animal_aliases = {"animal_shelter", "animal", "shelter", "animal_care"}
-    ngo_aliases = {"ngo", "orphanage", "charity", "non_profit", "nonprofit"}
-    compost_aliases = {"compost", "biogas", "waste_processor", "compost_biogas", "recycler"}
-
-    for row in partner_rows:
-        normalized = _normalize_partner_type(row.type)
-        if normalized in animal_aliases:
-            partner_groups["animal_shelter"].append(row)
-        if normalized in ngo_aliases:
-            partner_groups["ngo_orphanage"].append(row)
-        if normalized in compost_aliases:
-            partner_groups["compost_biogas"].append(row)
 
     summary = {
         "total_candidates": len(candidate_rows),
@@ -537,7 +511,6 @@ def get_rescue_routing(db: Session = Depends(get_db)):
         sorted_partners = sorted(
             partners,
             key=lambda p: (
-                0 if _normalize_city_name(p.location) == city and city else 1,
                 -(int(p.capacity) if p.capacity is not None else 0),
                 int(p.partner_id),
             ),
@@ -545,17 +518,13 @@ def get_rescue_routing(db: Session = Depends(get_db)):
         assigned = sorted_partners[0] if sorted_partners else None
         if assigned:
             summary["assigned"] += 1
-            match_type = "same_city" if _normalize_city_name(assigned.location) == city and city else "capacity_fallback"
+            match_type = "capacity_fallback"
         else:
             summary["needs_onboarding"] += 1
             match_type = "needs_onboarding"
 
-        distance_km = _distance_km(row.warehouse_city, assigned.location if assigned else None)
-        eta_mins = None
-        if distance_km is not None:
-            eta_mins = max(15, int(round(distance_km * 3.0)))
-        elif assigned:
-            eta_mins = 45 if match_type == "same_city" else 180
+        distance_km = None
+        eta_mins = 180 if assigned else None
 
         dispatch = dispatch_map.get(int(row.batch_id), None)
         if dispatch and dispatch.get("delivery_status"):
@@ -594,8 +563,8 @@ def get_rescue_routing(db: Session = Depends(get_db)):
                 partner_load[pid] = {
                     "partner_id": pid,
                     "partner_name": assigned.name,
-                    "partner_type": assigned.type,
-                    "partner_city": assigned.location,
+                    "partner_type": "partner",
+                    "partner_city": "Unknown",
                     "capacity": int(assigned.capacity or 0),
                     "assigned_batches": 0,
                     "assigned_quantity": 0,
@@ -628,9 +597,9 @@ def get_rescue_routing(db: Session = Depends(get_db)):
                 "estimated_co2_kg": estimated_co2_kg,
                 "partner_id": int(assigned.partner_id) if assigned else None,
                 "partner_name": assigned.name if assigned else None,
-                "partner_type": assigned.type if assigned else None,
-                "partner_city": assigned.location if assigned else None,
-                "partner_contact": assigned.contact_details if assigned else None,
+                "partner_type": "partner" if assigned else None,
+                "partner_city": "Unknown" if assigned else None,
+                "partner_contact": None,
                 "partner_capacity": int(assigned.capacity) if assigned and assigned.capacity is not None else 0,
             }
         )

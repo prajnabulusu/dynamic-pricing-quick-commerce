@@ -208,12 +208,11 @@ def get_social_impact(db: Session = Depends(get_db)):
     partners = db.execute(text("""
         SELECT
             rp.name,
-            rp.type,
             COUNT(rd.dispatch_id)              AS dispatches,
             SUM(rd.quantity_dispatched)        AS total_units
         FROM redistribution_dispatch rd
         JOIN redistribution_partners rp ON rd.partner_id = rp.partner_id
-        GROUP BY rp.name, rp.type
+        GROUP BY rp.name
         ORDER BY total_units DESC;
     """)).fetchall()
 
@@ -227,7 +226,7 @@ def get_social_impact(db: Session = Depends(get_db)):
         "partners": [
             {
                 "name":       r.name,
-                "type":       r.type,
+                "type":       "partner",
                 "dispatches": r.dispatches,
                 "units":      r.total_units,
             }
@@ -248,7 +247,7 @@ def get_perishable_lifecycle(db: Session = Depends(get_db)):
             pb.quantity,
             pb.manufacture_date,
             pb.expiry_date,
-            (pb.expiry_date - CURRENT_DATE)::int AS days_left,
+            (pb.expiry_date::date - CURRENT_DATE) AS days_left,
             pb.redistribution_status,
             pb.kg_saved,
             pb.co2_offset_kg,

@@ -124,10 +124,10 @@ def get_price_history(
 ):
     """Returns the last N price changes for a product — used for trend charts."""
     rows = db.execute(text("""
-        SELECT ph.old_price, ph.new_price, ph.change_reason, ph.timestamp
+        SELECT ph.old_price, ph.new_price, ph.change_reason, ph.created_at AS timestamp
         FROM price_history ph
         WHERE ph.product_id = :pid
-        ORDER BY ph.timestamp DESC
+        ORDER BY ph.created_at DESC
         LIMIT :lim;
     """), {"pid": product_id, "lim": limit}).fetchall()
 
