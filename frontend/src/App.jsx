@@ -1,8 +1,10 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import ProductsPage from "./pages/ProductsPage";
 import AdminDashboard from "./pages/AdminDashboard";
+import LiveOrdersPage from "./pages/LiveOrdersPage";
+import AnalyticsIntelligencePage from "./pages/AnalyticsIntelligencePage";
 
-const THEME_KEY = "quickprice-theme";
+const THEME_KEY = "warehouseops-theme";
 
 function getInitialTheme() {
   const saved = window.localStorage.getItem(THEME_KEY);
@@ -49,7 +51,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    document.body.style.backgroundColor = theme === "dark" ? "#020617" : "#f8fafc";
+    document.body.style.backgroundColor = theme === "dark" ? "#0f1115" : "#f4f2ea";
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
@@ -75,7 +77,7 @@ export default function App() {
       }
       return [...prev, { product, quantity: 1 }];
     });
-    showToast(`${product.name} added to cart`);
+    showToast(`${product.name} added to dispatch queue`);
   };
 
   const removeFromCart = (productId) =>
@@ -87,17 +89,20 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 ${
+      className={`relative min-h-screen overflow-x-hidden transition-colors duration-300 ${
         isDark
-          ? "bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.18),_transparent_32%),linear-gradient(180deg,_#020617_0%,_#0f172a_46%,_#111827_100%)] text-slate-100"
-          : "bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_38%,_#f8fafc_100%)] text-slate-900"
+          ? "bg-[radial-gradient(circle_at_15%_10%,_rgba(245,158,11,0.16),_transparent_35%),radial-gradient(circle_at_80%_12%,_rgba(20,184,166,0.14),_transparent_40%),linear-gradient(180deg,_#111317_0%,_#161a22_45%,_#0d1015_100%)] text-slate-100"
+          : "bg-[radial-gradient(circle_at_12%_8%,_rgba(217,119,6,0.14),_transparent_32%),radial-gradient(circle_at_85%_10%,_rgba(13,148,136,0.12),_transparent_38%),linear-gradient(180deg,_#f4f2ea_0%,_#efe8d8_40%,_#f8f4eb_100%)] text-stone-900"
       }`}
     >
+      <div className={`pointer-events-none absolute -left-16 top-24 h-52 w-52 rounded-full blur-3xl ${isDark ? "bg-amber-400/15" : "bg-amber-300/20"}`} />
+      <div className={`pointer-events-none absolute -right-20 top-44 h-64 w-64 rounded-full blur-3xl ${isDark ? "bg-teal-300/10" : "bg-teal-300/20"}`} />
+      <div className={`pointer-events-none absolute bottom-0 left-1/3 h-40 w-72 -translate-x-1/2 blur-3xl ${isDark ? "bg-cyan-300/8" : "bg-orange-200/20"}`} />
       <nav
         className={`sticky top-0 z-40 border-b backdrop-blur-xl ${
           isDark
-            ? "border-white/10 bg-slate-950/70"
-            : "border-slate-200/80 bg-white/75"
+            ? "border-white/10 bg-zinc-950/65"
+            : "border-stone-300/70 bg-[#f7f2e7]/80"
         }`}
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
@@ -105,28 +110,28 @@ export default function App() {
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-black tracking-[0.3em] ${
                 isDark
-                  ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200"
-                  : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                  ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                  : "border-amber-300 bg-amber-100 text-amber-800"
               }`}
             >
-              QP
+              WH
             </div>
             <div>
-              <p className={`text-lg font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
-                QuickPrice
+              <p className={`text-lg font-semibold ${isDark ? "text-white" : "text-stone-900"}`}>
+                Warehouse Nexus
               </p>
-              <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                Demand-aware pricing console
+              <p className={`text-xs ${isDark ? "text-zinc-400" : "text-stone-600"}`}>
+                Unified warehouse operations workspace
               </p>
             </div>
             <span
               className={`hidden rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${
                 isDark
-                  ? "bg-emerald-400/10 text-emerald-200 ring-1 ring-emerald-400/20"
-                  : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                  ? "bg-teal-400/10 text-teal-200 ring-1 ring-teal-400/25"
+                  : "bg-teal-100 text-teal-800 ring-1 ring-teal-200"
               }`}
             >
-              Live
+              Control Online
             </span>
           </div>
 
@@ -141,28 +146,56 @@ export default function App() {
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                 page === "shop"
                   ? isDark
-                    ? "bg-cyan-400 text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.28)]"
-                    : "bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.18)]"
+                    ? "bg-amber-300 text-zinc-950 shadow-[0_10px_30px_rgba(251,191,36,0.28)]"
+                    : "bg-stone-900 text-white shadow-[0_10px_25px_rgba(68,64,60,0.24)]"
                   : isDark
-                    ? "text-slate-300 hover:bg-white/8 hover:text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    ? "text-zinc-300 hover:bg-white/8 hover:text-white"
+                    : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              Shop
+              Operations Floor
             </button>
             <button
               onClick={() => setPage("admin")}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                 page === "admin"
                   ? isDark
-                    ? "bg-cyan-400 text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.28)]"
-                    : "bg-slate-900 text-white shadow-[0_10px_25px_rgba(15,23,42,0.18)]"
+                    ? "bg-amber-300 text-zinc-950 shadow-[0_10px_30px_rgba(251,191,36,0.28)]"
+                    : "bg-stone-900 text-white shadow-[0_10px_25px_rgba(68,64,60,0.24)]"
                   : isDark
-                    ? "text-slate-300 hover:bg-white/8 hover:text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    ? "text-zinc-300 hover:bg-white/8 hover:text-white"
+                    : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              Admin
+              Command Center
+            </button>
+            <button
+              onClick={() => setPage("live_orders")}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                page === "live_orders"
+                  ? isDark
+                    ? "bg-amber-300 text-zinc-950 shadow-[0_10px_30px_rgba(251,191,36,0.28)]"
+                    : "bg-stone-900 text-white shadow-[0_10px_25px_rgba(68,64,60,0.24)]"
+                  : isDark
+                    ? "text-zinc-300 hover:bg-white/8 hover:text-white"
+                    : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              }`}
+            >
+              Live Orders
+            </button>
+            <button
+              onClick={() => setPage("analytics")}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                page === "analytics"
+                  ? isDark
+                    ? "bg-amber-300 text-zinc-950 shadow-[0_10px_30px_rgba(251,191,36,0.28)]"
+                    : "bg-stone-900 text-white shadow-[0_10px_25px_rgba(68,64,60,0.24)]"
+                  : isDark
+                    ? "text-zinc-300 hover:bg-white/8 hover:text-white"
+                    : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              }`}
+            >
+              BI Intelligence
             </button>
 
             {page === "shop" && (
@@ -170,10 +203,10 @@ export default function App() {
                 onClick={() => setPage("cart")}
                 className={`relative ml-1 rounded-xl p-2.5 transition-colors ${
                   isDark
-                    ? "text-slate-200 hover:bg-white/8"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "text-zinc-200 hover:bg-white/8"
+                    : "text-stone-600 hover:bg-stone-100"
                 }`}
-                aria-label="Cart summary"
+                aria-label="Dispatch queue summary"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path
@@ -185,7 +218,7 @@ export default function App() {
                 {cartCount > 0 && (
                   <span
                     className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${
-                      isDark ? "bg-cyan-400 text-slate-950" : "bg-slate-900 text-white"
+                      isDark ? "bg-amber-300 text-zinc-950" : "bg-stone-900 text-white"
                     }`}
                   >
                     {cartCount}
@@ -205,9 +238,12 @@ export default function App() {
           removeFromCart={removeFromCart}
           clearCart={clearCart}
           showToast={showToast}
+          goToLiveOrders={() => setPage("live_orders")}
         />
       )}
       {page === "admin" && <AdminDashboard theme={theme} />}
+      {page === "live_orders" && <LiveOrdersPage theme={theme} />}
+      {page === "analytics" && <AnalyticsIntelligencePage theme={theme} />}
 
       {toasts.length > 0 && (
         <div className="fixed right-4 top-20 z-50 flex w-[min(92vw,380px)] flex-col gap-3">
@@ -242,8 +278,8 @@ export default function App() {
                     }}
                     className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                       isDark
-                        ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
-                        : "bg-white text-slate-900 hover:bg-slate-100"
+                        ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
+                        : "bg-white text-stone-900 hover:bg-stone-100"
                     }`}
                   >
                     {toast.actionLabel}
@@ -257,5 +293,4 @@ export default function App() {
     </div>
   );
 }
-
 
