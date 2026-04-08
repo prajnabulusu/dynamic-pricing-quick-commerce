@@ -171,3 +171,39 @@ def get_recent_orders(limit: int = 10, db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+@router.get("/live-items", tags=["Orders"])
+def get_live_order_items(limit: int = 200, db: Session = Depends(get_db)):
+    """
+    Product-level live order feed for Operations Floor.
+    Returns one row per product line from the most recent orders.
+    """
+    rows = db.execute(text("""
+        SELECT
+            o.order_id,
+            o.order_timestamp,
+            oi.product_id,
+            p.name AS product_name,
+            oi.quantity,
+            oi.selling_price,
+            (oi.quantity * oi.selling_price) AS line_total
+        FROM orders o
+        JOIN order_items oi ON o.order_id = oi.order_id
+        JOIN products p ON oi.product_id = p.product_id
+        ORDER BY o.order_timestamp DESC, o.order_id DESC, oi.order_item_id DESC
+        LIMIT :lim;
+    """), {"lim": limit}).fetchall()
+
+    return [
+        {
+            "order_id": int(r.order_id),
+            "timestamp": r.order_timestamp,
+            "product_id": int(r.product_id),
+            "product_name": r.product_name,
+            "quantity": int(r.quantity or 0),
+            "selling_price": float(r.selling_price or 0),
+            "line_total": float(r.line_total or 0),
+        }
+        for r in rows
+    ]

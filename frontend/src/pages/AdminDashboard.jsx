@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   getDashboardStats,
   getNearExpiry,
@@ -11,7 +11,6 @@ import {
   getAllPrices,
   simulateSpike,
 } from "../api";
-import { useRef } from "react";
 import axios from "axios";
 
 const api = axios.create({ baseURL: "http://localhost:8000", timeout: 10000 });
@@ -21,6 +20,98 @@ const getSocialImpact = () => api.get("/phase-b/social-impact");
 const getPerishableLife = () => api.get("/phase-b/perishable-lifecycle");
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
+const WEATHER_TYPES = ["Sunny", "Cloudy", "Rainy", "Stormy", "Humid", "Heatwave"];
+const INTENSITY_FACTORS = { light: 0.65, medium: 1, heavy: 1.45 };
+
+const roundMoney = (value) => Number(value.toFixed(2));
+
+function resolveWeatherMode(simulation) {
+  if (!simulation?.active) return null;
+  if (simulation.rainOn && !["Rainy", "Stormy"].includes(simulation.weatherType)) {
+    return "Rainy";
+  }
+  return simulation.weatherType;
+}
+
+function getWeatherImpactForProduct(product, simulation) {
+  const mode = resolveWeatherMode(simulation);
+  if (!mode) return { multiplier: 1, reason: "" };
+
+  const intensityFactor = INTENSITY_FACTORS[simulation.intensity] || 1;
+  const name = String(product.name || "").toLowerCase();
+  const category = String(product.category_name || "").toLowerCase();
+  const has = (tokens) => tokens.some((token) => name.includes(token) || category.includes(token));
+
+  let bump = 0;
+  let reason = "";
+
+  if (mode === "Rainy") {
+    if (has(["snack", "noodle", "tea", "coffee", "milk", "bread", "umbrella", "raincoat", "instant"])) {
+      bump = 0.02 * intensityFactor;
+      reason = "Rain simulation active";
+    } else if (has(["dairy", "staple", "rice", "dal", "oil", "vegetable"])) {
+      bump = 0.012 * intensityFactor;
+      reason = "Rainy weather essentials uplift";
+    }
+  } else if (mode === "Stormy") {
+    if (has(["snack", "noodle", "tea", "coffee", "milk", "bread", "umbrella", "raincoat", "water", "instant"])) {
+      bump = 0.04 * intensityFactor;
+      reason = "Storm simulation active";
+    } else if (has(["dairy", "staple", "rice", "dal", "oil", "vegetable"])) {
+      bump = 0.024 * intensityFactor;
+      reason = "Storm convenience uplift";
+    }
+  } else if (mode === "Heatwave") {
+    if (has(["beverage", "water", "juice", "ice cream", "yogurt", "curd", "lassi", "drink"])) {
+      bump = 0.03 * intensityFactor;
+      reason = "Heatwave cooling-demand uplift";
+    }
+  } else if (mode === "Humid") {
+    if (has(["beverage", "water", "juice", "curd", "yogurt"])) {
+      bump = 0.014 * intensityFactor;
+      reason = "Humid-weather refreshment uplift";
+    }
+  } else if (mode === "Sunny") {
+    if (has(["beverage", "water", "juice", "ice cream"])) {
+      bump = 0.01 * intensityFactor;
+      reason = "Sunny-weather beverage uplift";
+    }
+  }
+
+  return { multiplier: 1 + bump, reason };
+}
+
+function applyWeatherImpactToPrices(sourcePrices, simulation) {
+  if (!simulation?.active) {
+    return (sourcePrices || []).map((product) => ({
+      ...product,
+      weather_adjusted: false,
+      weather_old_price: Number(product.recommended_price || 0),
+      weather_price_reason: "",
+    }));
+  }
+
+  const mode = resolveWeatherMode(simulation) || simulation.weatherType;
+  return (sourcePrices || []).map((product) => {
+    const currentPrice = Number(product.recommended_price || 0);
+    const { multiplier, reason } = getWeatherImpactForProduct(product, simulation);
+    const nextPrice = roundMoney(currentPrice * multiplier);
+    const adjusted = Math.abs(nextPrice - currentPrice) > 0.009;
+
+    return {
+      ...product,
+      recommended_price: nextPrice,
+      weather_adjusted: adjusted,
+      weather_old_price: currentPrice,
+      weather_price_reason: adjusted
+        ? `Price updated due to weather: ${mode} (${simulation.intensity})${reason ? ` · ${reason}` : ""}`
+        : "",
+      price_reason: adjusted
+        ? `${product.price_reason || "Dynamic adjustment"}; Weather simulation: ${mode} (${simulation.intensity})`
+        : product.price_reason,
+    };
+  });
+}
 
 function StatCard({ label, value, sub, accent, theme }) {
   const isDark = theme === "dark";
@@ -102,7 +193,7 @@ function WeatherIcon({ weather }) {
 function SpikeSimulator({ products, theme, onSimulated }) {
   const isDark = theme === "dark";
   const [selectedId, setSelectedId] = useState("");
-  const [count, setCount] = useState(20);
+  const [count, setCount] = useState(6);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -124,7 +215,7 @@ function SpikeSimulator({ products, theme, onSimulated }) {
   return (
     <div className="space-y-4">
       <p className={cx("text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-        Flood Kafka with synthetic demand for one product and verify that pricing responds on the storefront without changing any backend behavior.
+        Generate synthetic demand for a selected SKU and validate that warehouse pricing reacts without changing backend logic.
       </p>
       <select
         value={selectedId}
@@ -147,7 +238,7 @@ function SpikeSimulator({ products, theme, onSimulated }) {
           <span className={isDark ? "text-slate-400" : "text-slate-500"}>Events</span>
           <span className={cx("font-semibold", isDark ? "text-white" : "text-slate-800")}>{count}</span>
         </div>
-        <input type="range" min={5} max={50} step={5} value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full accent-cyan-400" />
+        <input type="range" min={1} max={50} step={1} value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full accent-cyan-400" />
       </div>
       <button
         onClick={run}
@@ -170,6 +261,85 @@ function SpikeSimulator({ products, theme, onSimulated }) {
   );
 }
 
+function WeatherSimulationPanel({ draft, onDraftChange, onApply, onClear, activeSimulation, theme }) {
+  const isDark = theme === "dark";
+  const mode = resolveWeatherMode(activeSimulation);
+
+  return (
+    <div className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+      <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>Weather simulation control</p>
+      <p className={cx("mt-2 text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
+        Simulate weather impact and apply it to pricing. Press Apply to jump directly to Live Pricing.
+      </p>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className={cx("rounded-2xl border px-4 py-3", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50")}>
+          <p className={cx("text-xs uppercase tracking-[0.16em]", isDark ? "text-slate-500" : "text-slate-400")}>Rain</p>
+          <div className="mt-2 flex gap-2">
+            {[{ id: false, label: "Off" }, { id: true, label: "On" }].map((item) => (
+              <button
+                key={String(item.id)}
+                onClick={() => onDraftChange((prev) => ({ ...prev, rainOn: item.id }))}
+                className={cx(
+                  "rounded-xl px-3 py-1.5 text-xs font-semibold",
+                  draft.rainOn === item.id
+                    ? isDark ? "bg-amber-300 text-zinc-950" : "bg-stone-900 text-white"
+                    : isDark ? "bg-slate-800 text-slate-300" : "bg-white text-slate-700 ring-1 ring-slate-200"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={cx("rounded-2xl border px-4 py-3", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50")}>
+          <p className={cx("text-xs uppercase tracking-[0.16em]", isDark ? "text-slate-500" : "text-slate-400")}>Weather Type</p>
+          <select
+            value={draft.weatherType}
+            onChange={(e) => onDraftChange((prev) => ({ ...prev, weatherType: e.target.value }))}
+            className={cx("mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none", isDark ? "border-white/10 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-800")}
+          >
+            {WEATHER_TYPES.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className={cx("mt-4 rounded-2xl border px-4 py-3", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50")}>
+        <p className={cx("text-xs uppercase tracking-[0.16em]", isDark ? "text-slate-500" : "text-slate-400")}>Intensity</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {["light", "medium", "heavy"].map((level) => (
+            <button
+              key={level}
+              onClick={() => onDraftChange((prev) => ({ ...prev, intensity: level }))}
+              className={cx(
+                "rounded-xl px-3 py-1.5 text-xs font-semibold capitalize",
+                draft.intensity === level
+                  ? isDark ? "bg-cyan-300 text-slate-950" : "bg-cyan-700 text-white"
+                  : isDark ? "bg-slate-800 text-slate-300" : "bg-white text-slate-700 ring-1 ring-slate-200"
+              )}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button onClick={onApply} className={cx("rounded-2xl px-4 py-2 text-sm font-semibold", isDark ? "bg-amber-300 text-zinc-950 hover:bg-amber-200" : "bg-stone-900 text-white hover:bg-stone-800")}>Apply Weather</button>
+        <button onClick={onClear} className={cx("rounded-2xl px-4 py-2 text-sm font-semibold", isDark ? "bg-slate-800 text-slate-100 hover:bg-slate-700" : "bg-slate-100 text-slate-700 hover:bg-slate-200")}>Clear Simulation</button>
+      </div>
+
+      {activeSimulation?.active && (
+        <p className={cx("mt-3 text-xs font-semibold", isDark ? "text-emerald-200" : "text-emerald-700")}>
+          {mode === "Rainy" ? "Rain simulation active" : `${mode} simulation active`} · intensity {activeSimulation.intensity}
+        </p>
+      )}
+    </div>
+  );
+}
 function PerishableLifecycle({ items, theme }) {
   const isDark = theme === "dark";
   const statusColors = {
@@ -237,12 +407,6 @@ function EmptyState({ message, theme }) {
 function InteractiveSeriesChart({
   title,
   data,
-  metricKey,
-  type,
-  color,
-  unit,
-  xLabel,
-  yLabel,
   theme,
 }) {
   const isDark = theme === "dark";
@@ -265,19 +429,28 @@ function InteractiveSeriesChart({
     );
   }
 
-  const values = data.map((p) => Number(p[metricKey] || 0));
-  const minVal = Math.min(...values);
-  const maxVal = Math.max(...values);
-  const range = Math.max(maxVal - minVal, 0.0001);
+  const demandValues = data.map((p) => Number(p.demand_units || 0));
+  const priceValues = data.map((p) => Number(p.price || 0));
+  const rawDemandMax = Math.max(...demandValues, 1);
+  const demandMax = rawDemandMax <= 10 ? 10 : rawDemandMax <= 30 ? 30 : Math.ceil(rawDemandMax / 10) * 10;
+  const demandMin = 0;
+  const demandRange = Math.max(demandMax - demandMin, 1);
+  const priceMinRaw = Math.min(...priceValues);
+  const priceMaxRaw = Math.max(...priceValues);
+  const pricePad = Math.max((priceMaxRaw - priceMinRaw) * 0.08, 0.5);
+  const priceMin = Math.max(0, priceMinRaw - pricePad);
+  const priceMax = priceMaxRaw + pricePad;
+  const priceRange = Math.max(priceMax - priceMin, 0.0001);
 
   const points = data.map((point, idx) => {
     const x = padLeft + (data.length > 1 ? (idx / (data.length - 1)) * chartW : chartW / 2);
-    const y = padTop + (1 - (Number(point[metricKey] || 0) - minVal) / range) * chartH;
-    return { x, y, point };
+    const demandY = padTop + (1 - (Number(point.demand_units || 0) - demandMin) / demandRange) * chartH;
+    const priceY = padTop + (1 - (Number(point.price || 0) - priceMin) / priceRange) * chartH;
+    return { x, demandY, priceY, point };
   });
 
-  const linePath = points.map((pt, idx) => `${idx === 0 ? "M" : "L"} ${pt.x} ${pt.y}`).join(" ");
-  const areaPath = `${linePath} L ${padLeft + chartW} ${padTop + chartH} L ${padLeft} ${padTop + chartH} Z`;
+  const demandPath = points.map((pt, idx) => `${idx === 0 ? "M" : "L"} ${pt.x} ${pt.demandY}`).join(" ");
+  const pricePath = points.map((pt, idx) => `${idx === 0 ? "M" : "L"} ${pt.x} ${pt.priceY}`).join(" ");
   const active = hoverIndex != null ? points[hoverIndex] : points[points.length - 1];
 
   const onMove = (event) => {
@@ -288,18 +461,19 @@ function InteractiveSeriesChart({
     setHoverIndex(Math.max(0, Math.min(data.length - 1, idx)));
   };
 
-  const currentVal = Number(active.point[metricKey] || 0);
-  const display = unit === "%" ? `${(currentVal * 100).toFixed(1)}%` : `${unit}${currentVal.toFixed(2)}`;
+  const currentDemand = Number(active.point.demand_units || 0);
+  const currentPrice = Number(active.point.price || 0);
   const firstTs = data.length ? new Date(data[0].timestamp).toLocaleTimeString() : "";
   const lastTs = data.length ? new Date(data[data.length - 1].timestamp).toLocaleTimeString() : "";
-  const yMinLabel = unit === "%" ? `${(minVal * 100).toFixed(0)}%` : `${unit}${minVal.toFixed(2)}`;
-  const yMaxLabel = unit === "%" ? `${(maxVal * 100).toFixed(0)}%` : `${unit}${maxVal.toFixed(2)}`;
 
   return (
     <div className={cx("rounded-2xl border p-4", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50/80")}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-800")}>{title}</p>
-        <p className={cx("text-sm font-bold", isDark ? "text-cyan-200" : "text-cyan-700")}>{display}</p>
+        <div className="text-right">
+          <p className={cx("text-xs font-semibold", isDark ? "text-orange-200" : "text-orange-700")}>Demand: {currentDemand.toFixed(1)} units</p>
+          <p className={cx("text-xs font-semibold", isDark ? "text-cyan-200" : "text-cyan-700")}>Price: Rs. {currentPrice.toFixed(2)}</p>
+        </div>
       </div>
       <div className="relative overflow-hidden rounded-xl">
         <svg
@@ -315,28 +489,35 @@ function InteractiveSeriesChart({
           })}
           <line x1={padLeft} y1={padTop + chartH} x2={padLeft + chartW} y2={padTop + chartH} stroke={isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"} strokeWidth="1" />
           <line x1={padLeft} y1={padTop} x2={padLeft} y2={padTop + chartH} stroke={isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"} strokeWidth="1" />
-          {type === "area" && <path d={areaPath} fill={isDark ? "rgba(34,211,238,0.20)" : "rgba(6,182,212,0.20)"} />}
-          {type !== "bar" && <path d={linePath} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />}
-          {type === "bar" && points.map((pt, idx) => (
-            <rect key={idx} x={pt.x - 3} y={pt.y} width="6" height={padTop + chartH - pt.y} rx="2" fill={color} opacity="0.85" />
-          ))}
+          <path d={demandPath} fill="none" stroke="#fb923c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+          <path d={pricePath} fill="none" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
           {active && (
             <>
               <line x1={active.x} y1={padTop} x2={active.x} y2={padTop + chartH} stroke={isDark ? "rgba(255,255,255,0.30)" : "rgba(15,23,42,0.20)"} strokeDasharray="4 4" />
-              <circle cx={active.x} cy={active.y} r="5" fill={color} />
+              <circle cx={active.x} cy={active.demandY} r="5" fill="#fb923c" />
+              <circle cx={active.x} cy={active.priceY} r="5" fill="#22d3ee" />
             </>
           )}
           <text x={width / 2} y={height - 10} textAnchor="middle" fontSize="11" fill={isDark ? "#94a3b8" : "#64748b"}>
-            {xLabel}
+            Time (event timeline)
           </text>
           <text x={14} y={height / 2} textAnchor="middle" fontSize="11" fill={isDark ? "#94a3b8" : "#64748b"} transform={`rotate(-90 14 ${height / 2})`}>
-            {yLabel}
+            Demand (units)
+          </text>
+          <text x={width - 12} y={height / 2} textAnchor="middle" fontSize="11" fill={isDark ? "#94a3b8" : "#64748b"} transform={`rotate(90 ${width - 12} ${height / 2})`}>
+            Price (Rs.)
           </text>
           <text x={padLeft - 6} y={padTop + 10} textAnchor="end" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
-            {yMaxLabel}
+            {demandMax.toFixed(0)}u
           </text>
           <text x={padLeft - 6} y={padTop + chartH - 2} textAnchor="end" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
-            {yMinLabel}
+            0u
+          </text>
+          <text x={padLeft + chartW + 6} y={padTop + 10} textAnchor="start" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            Rs. {priceMax.toFixed(2)}
+          </text>
+          <text x={padLeft + chartW + 6} y={padTop + chartH - 2} textAnchor="start" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
+            Rs. {priceMin.toFixed(2)}
           </text>
           <text x={padLeft} y={height - 24} textAnchor="start" fontSize="10" fill={isDark ? "#94a3b8" : "#64748b"}>
             {firstTs}
@@ -346,8 +527,10 @@ function InteractiveSeriesChart({
           </text>
         </svg>
         {active && (
-          <div className={cx("pointer-events-none absolute right-3 top-3 rounded-lg px-2 py-1 text-xs", isDark ? "bg-slate-800/90 text-slate-100" : "bg-white/95 text-slate-700 shadow")}>
-            {new Date(active.point.timestamp).toLocaleTimeString()}
+          <div className={cx("pointer-events-none absolute right-3 top-3 rounded-lg px-3 py-2 text-xs", isDark ? "bg-slate-800/90 text-slate-100" : "bg-white/95 text-slate-700 shadow")}>
+            <p>{new Date(active.point.timestamp).toLocaleTimeString()}</p>
+            <p>Demand: {Number(active.point.demand_units || 0).toFixed(1)} units</p>
+            <p>Price: Rs. {Number(active.point.price || 0).toFixed(2)}</p>
           </div>
         )}
       </div>
@@ -357,57 +540,35 @@ function InteractiveSeriesChart({
 
 function LiveProductDrawer({ product, history, series, demandSeries, loading, onClose, theme }) {
   const isDark = theme === "dark";
-  const [activeGraph, setActiveGraph] = useState("price_tape");
+  const demandByTimestamp = new Map(
+    (demandSeries || []).map((d) => [new Date(d.timestamp).getTime(), { views: Number(d.views || 0), intensity: Number(d.intensity || 0) }])
+  );
 
-  const merged = (series || []).map((s, idx, arr) => {
+  const merged = (series || []).map((s) => {
     const price = Number(s.recommended_price || 0);
-    const prevPrice = idx > 0 ? Number(arr[idx - 1].recommended_price || 0) : price;
-    const priceChangePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+    const demandScore = Number(s.demand_score || 0);
+    const ts = new Date(s.timestamp).getTime();
+    const demandSignals = demandByTimestamp.get(ts);
+    const baselineUnits = Math.max(0, Math.min(10, demandScore * 10));
+    const viewUnits = demandSignals?.views || 0;
+    const intensityUnits = (demandSignals?.intensity || 0) * 10;
+    const demandUnits = Number(Math.max(baselineUnits, viewUnits, intensityUnits).toFixed(1));
+
     return {
       timestamp: s.timestamp,
       price,
-      demand: Number(s.demand_score || 0),
-      expiry: Number(s.expiry_factor || 0),
-      stock: Number(s.stock_factor || 0),
-      price_change_pct: priceChangePct,
-      volatility: Math.abs(priceChangePct),
-      stress: Math.max(0, Number(s.demand_score || 0) * 0.65 + Number(s.expiry_factor || 0) * 0.35 - Number(s.stock_factor || 0) * 0.25),
+      demand_units: demandUnits,
     };
   });
 
   const chartData = merged.slice(-140);
 
-  const demandChartData = (demandSeries || []).map((d) => ({
-    timestamp: d.timestamp,
-    intensity: Number(d.intensity || 0),
-    views: Number(d.views || 0),
-  }));
-
-  const graphMap = {
-    price_tape: { label: "Price Tape", key: "price", type: "line", color: "#22d3ee", unit: "Rs. ", yLabel: "Price (Rupees)" },
-    demand_pulse: { label: "Model Demand", key: "demand", type: "area", color: "#fb923c", unit: "%", yLabel: "Demand Score (%)" },
-    traffic_pulse: { label: "Traffic Pulse", key: "intensity", type: "bar", color: "#38bdf8", unit: "%", yLabel: "View Intensity (%)" },
-    momentum_bars: { label: "Momentum Bars", key: "price_change_pct", type: "bar", color: "#a78bfa", unit: "%", yLabel: "Price Change (%)" },
-    volatility_wave: { label: "Volatility Wave", key: "volatility", type: "area", color: "#f43f5e", unit: "%", yLabel: "Volatility (%)" },
-    risk_index: { label: "Risk Index", key: "stress", type: "line", color: "#34d399", unit: "%", yLabel: "Stress Score (%)" },
-  };
-
   const latestReason = history && history.length > 0 ? history[0].change_reason : "";
-  const latestDemandSource = activeGraph === "traffic_pulse" && demandChartData.length ? demandChartData : chartData;
-  const latestDemand = latestDemandSource.length
-    ? Number(
-      (activeGraph === "traffic_pulse"
-        ? latestDemandSource[latestDemandSource.length - 1].intensity
-        : latestDemandSource[latestDemandSource.length - 1].demand) || 0
-    )
+  const latestDemand = chartData.length
+    ? Number(chartData[chartData.length - 1].demand_units || 0)
     : 0;
-  const demandLabel = latestDemand >= 0.75 ? "High demand" : latestDemand >= 0.45 ? "Rising demand" : "Normal demand";
-  const selectedData =
-    activeGraph === "traffic_pulse" && demandChartData.length
-      ? demandChartData.slice(-80)
-      : activeGraph === "demand_pulse"
-        ? chartData.slice(-90)
-        : chartData.slice(-120);
+  const demandLabel = latestDemand >= 20 ? "Demand spike" : latestDemand >= 10 ? "High demand" : latestDemand >= 5 ? "Rising demand" : "Normal demand";
+  const selectedData = chartData.slice(-120);
 
   return (
     <div className="fixed inset-0 z-40">
@@ -418,28 +579,11 @@ function LiveProductDrawer({ product, history, series, demandSeries, loading, on
             <p className={cx("text-xs uppercase tracking-[0.18em]", isDark ? "text-slate-400" : "text-slate-500")}>Live Product Monitor</p>
             <h3 className={cx("mt-1 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>{product?.name}</h3>
             <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{product?.price_reason || latestReason || "Waiting for first change..."}</p>
-            <p className={cx("mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold", latestDemand >= 0.75 ? (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700") : latestDemand >= 0.45 ? (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700") : (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"))}>
-              {demandLabel} ({(latestDemand * 100).toFixed(0)}%)
+            <p className={cx("mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold", latestDemand >= 20 ? (isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700") : latestDemand >= 10 ? (isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700") : (isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"))}>
+              {demandLabel} ({latestDemand.toFixed(1)} units)
             </p>
           </div>
           <button onClick={onClose} className={cx("rounded-xl px-3 py-2 text-xs font-semibold", isDark ? "bg-slate-800 text-slate-100" : "bg-slate-100 text-slate-700")}>Close</button>
-        </div>
-
-        <div className="mb-3 flex flex-wrap gap-2">
-          {Object.entries(graphMap).map(([id, g]) => (
-            <button
-              key={id}
-              onClick={() => setActiveGraph(id)}
-              className={cx(
-                "rounded-xl px-3 py-1.5 text-xs font-semibold",
-                activeGraph === id
-                  ? isDark ? "bg-violet-400 text-slate-950" : "bg-violet-700 text-white"
-                  : isDark ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-700"
-              )}
-            >
-              {g.label}
-            </button>
-          ))}
         </div>
 
         {loading ? (
@@ -449,14 +593,8 @@ function LiveProductDrawer({ product, history, series, demandSeries, loading, on
         ) : (
           <div className="space-y-4">
             <InteractiveSeriesChart
-              title={`${graphMap[activeGraph].label} trend (live)`}
+              title="Live Demand and Price"
               data={selectedData}
-              metricKey={graphMap[activeGraph].key}
-              type={graphMap[activeGraph].type}
-              color={graphMap[activeGraph].color}
-              unit={graphMap[activeGraph].unit}
-              xLabel="Time (event timeline)"
-              yLabel={graphMap[activeGraph].yLabel}
               theme={theme}
             />
           </div>
@@ -525,6 +663,18 @@ export default function AdminDashboard({ theme }) {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [weatherDraft, setWeatherDraft] = useState({
+    rainOn: false,
+    weatherType: "Cloudy",
+    intensity: "medium",
+  });
+  const [weatherSimulation, setWeatherSimulation] = useState({
+    active: false,
+    rainOn: false,
+    weatherType: "Cloudy",
+    intensity: "medium",
+    appliedAt: null,
+  });
   const pricesSigRef = useRef("");
 
   const fetchAll = useCallback(async () => {
@@ -614,15 +764,39 @@ export default function AdminDashboard({ theme }) {
     };
   }, [selectedProduct, fetchProductChart]);
 
+  const applyWeatherSimulation = useCallback(() => {
+    setWeatherSimulation({
+      ...weatherDraft,
+      active: true,
+      appliedAt: new Date().toISOString(),
+    });
+    setActiveTab("pricing");
+  }, [weatherDraft]);
+
+  const clearWeatherSimulation = useCallback(() => {
+    setWeatherSimulation({
+      active: false,
+      rainOn: false,
+      weatherType: "Cloudy",
+      intensity: "medium",
+      appliedAt: null,
+    });
+  }, []);
+
+  const displayPrices = useMemo(
+    () => applyWeatherImpactToPrices(prices, weatherSimulation),
+    [prices, weatherSimulation]
+  );
+
   const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "pricing", label: "Live Pricing" },
-    { id: "perishable", label: "Perishable" },
-    { id: "weather", label: "Weather" },
+    { id: "overview", label: "Operations Overview" },
+    { id: "pricing", label: "Dynamic Pricing" },
+    { id: "perishable", label: "Shelf-Life Control" },
+    { id: "weather", label: "Weather Signals" },
     { id: "coldchain", label: "Cold Chain" },
-    { id: "impact", label: "Impact" },
-    { id: "rescue", label: "Rescue Routing MVP" },
-    { id: "simulator", label: "Simulator" },
+    { id: "impact", label: "Impact Ledger" },
+    { id: "rescue", label: "Rescue Routing" },
+    { id: "simulator", label: "Demand Lab" },
   ];
 
   if (loading) {
@@ -645,13 +819,13 @@ export default function AdminDashboard({ theme }) {
               "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
               isDark ? "bg-violet-400/12 text-violet-200" : "bg-violet-50 text-violet-700"
             )}>
-              Admin control plane
+              Warehouse command plane
             </span>
             <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
-              Operational pricing, freshness, and event visibility
+              Enterprise visibility for pricing, freshness, routing, and events
             </h1>
             <p className={cx("mt-3 max-w-3xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-              The dashboard keeps the same live data, but now presents it with clearer grouping, stronger contrast, and a full dark mode designed for long sessions.
+              A single operational view for organizations running warehouse networks, from demand pressure and pricing decisions to cold-chain compliance and rescue routing.
             </p>
           </div>
 
@@ -698,8 +872,8 @@ export default function AdminDashboard({ theme }) {
             className={cx(
               "shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all",
               activeTab === tab.id
-                ? isDark ? "bg-cyan-400 text-slate-950" : "bg-slate-900 text-white"
-                : isDark ? "text-slate-300 hover:bg-white/[0.06]" : "text-slate-600 hover:bg-slate-100"
+                ? isDark ? "bg-amber-300 text-zinc-950" : "bg-stone-900 text-white"
+                : isDark ? "text-slate-300 hover:bg-white/[0.06]" : "text-slate-600 hover:bg-stone-100"
             )}
           >
             {tab.label}
@@ -710,7 +884,7 @@ export default function AdminDashboard({ theme }) {
             )}
           </button>
         ))}
-        <button onClick={fetchAll} className={cx("ml-auto shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
+        <button onClick={fetchAll} className={cx("ml-auto shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-amber-200" : "text-stone-900")}>
           Refresh now
         </button>
       </div>
@@ -809,9 +983,17 @@ export default function AdminDashboard({ theme }) {
 
       {activeTab === "pricing" && (
         <div className="mt-6">
-          <Section title="Live pricing - all products" theme={theme}>
+          <Section title="Live dynamic pricing - all SKUs" theme={theme}>
+            {weatherSimulation?.active && (
+              <div className={cx(
+                "mb-4 rounded-2xl border px-4 py-3 text-xs font-semibold",
+                isDark ? "border-cyan-300/20 bg-cyan-400/10 text-cyan-100" : "border-cyan-200 bg-cyan-50 text-cyan-700"
+              )}>
+                Price updated due to weather: {resolveWeatherMode(weatherSimulation) || weatherSimulation.weatherType} ({weatherSimulation.intensity})
+              </div>
+            )}
             <p className={cx("mb-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
-              Click any product row to open a live trading-style chart.
+              Click any SKU row to open the live monitor.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
@@ -825,24 +1007,33 @@ export default function AdminDashboard({ theme }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {prices.map((product) => {
-                    const up = product.recommended_price > product.base_price;
-                    const down = product.recommended_price < product.base_price;
+                  {displayPrices.map((product) => {
+                    const referencePrice = product.weather_adjusted ? Number(product.weather_old_price || product.base_price) : Number(product.base_price);
+                    const up = Number(product.recommended_price) > referencePrice;
+                    const down = Number(product.recommended_price) < referencePrice;
                     return (
                       <tr
                         key={product.product_id}
                         onClick={() => setSelectedProduct(product)}
                         className={cx(
                           "cursor-pointer border-b last:border-0",
+                          product.weather_adjusted && (isDark ? "bg-cyan-500/8" : "bg-cyan-50/70"),
                           isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70"
                         )}
                       >
                         <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{product.name}</td>
                         <td className={cx("py-3 text-right", isDark ? "text-slate-400" : "text-slate-400")}>Rs. {product.base_price.toFixed(2)}</td>
                         <td className="py-3 text-right">
-                          <span className={cx("font-semibold", up ? (isDark ? "text-rose-300" : "text-rose-600") : down ? (isDark ? "text-emerald-300" : "text-emerald-600") : (isDark ? "text-slate-200" : "text-slate-700"))}>
-                            {up ? "UP" : down ? "DOWN" : "FLAT"} Rs. {product.recommended_price.toFixed(2)}
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span className={cx("font-semibold", up ? (isDark ? "text-rose-300" : "text-rose-600") : down ? (isDark ? "text-emerald-300" : "text-emerald-600") : (isDark ? "text-slate-200" : "text-slate-700"))}>
+                              {up ? "UP" : down ? "DOWN" : "FLAT"} Rs. {Number(product.recommended_price).toFixed(2)}
+                            </span>
+                            {product.weather_adjusted && (
+                              <span className={cx("text-[11px]", isDark ? "text-slate-400" : "text-slate-500")}>
+                                was Rs. {Number(product.weather_old_price).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -852,7 +1043,9 @@ export default function AdminDashboard({ theme }) {
                             <span className={cx("w-9 text-right text-xs", isDark ? "text-slate-400" : "text-slate-400")}>{Math.round(product.demand_score * 100)}%</span>
                           </div>
                         </td>
-                        <td className={cx("max-w-xs py-3 pl-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{product.price_reason}</td>
+                        <td className={cx("max-w-xs py-3 pl-3 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
+                          {product.weather_price_reason || product.price_reason}
+                        </td>
                       </tr>
                     );
                   })}
@@ -874,6 +1067,14 @@ export default function AdminDashboard({ theme }) {
 
       {activeTab === "weather" && (
         <div className="mt-6 space-y-6">
+          <WeatherSimulationPanel
+            draft={weatherDraft}
+            onDraftChange={setWeatherDraft}
+            onApply={applyWeatherSimulation}
+            onClear={clearWeatherSimulation}
+            activeSimulation={weatherSimulation}
+            theme={theme}
+          />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {weather.map((item) => (
               <div key={item.city} className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
@@ -1180,9 +1381,9 @@ export default function AdminDashboard({ theme }) {
             />
           </Section>
           <div className={cx("rounded-[30px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
-            <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>How it works</p>
+            <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>What this validates</p>
             <p className={cx("mt-3 text-sm leading-7", isDark ? "text-slate-300" : "text-slate-600")}>
-              The simulator calls <code>/events/spike-simulator/{"{id}"}</code>, which floods the <code>demand_events</code> Kafka topic. The demand consumer detects the spike at &gt;= 5 events within 5 minutes and triggers repricing. Switch to the shop page to watch the updated price surface there.
+              The simulator calls <code>/events/spike-simulator/{"{id}"}</code> and floods the <code>demand_events</code> Kafka topic. When demand crosses the threshold, repricing triggers automatically. Switch to the Operations Floor to observe the new price propagation.
             </p>
           </div>
         </div>
@@ -1202,3 +1403,6 @@ export default function AdminDashboard({ theme }) {
     </div>
   );
 }
+
+
+

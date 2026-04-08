@@ -18,6 +18,7 @@ export const getPriceSeries  = (id, limit=80) => api.get(`/price/${id}/series?li
 // ── Orders ────────────────────────────────────────────────────────────────────
 export const placeOrder     = (body) => api.post("/orders/", body);
 export const getRecentOrders= ()     => api.get("/orders/recent");
+export const getLiveOrderItems = (limit=200) => api.get(`/orders/live-items?limit=${limit}`);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const getDashboardStats    = () => api.get("/dashboard/stats");

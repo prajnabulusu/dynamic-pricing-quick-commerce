@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
-import { getProducts, placeOrder, recordEvent, getViewStats } from "../api";
+import { getProducts, placeOrder, recordEvent, getViewStats, getLiveOrderItems } from "../api";
 
 const SESSION_ID = Math.random().toString(36).slice(2, 10);
 const EXPIRY_ALERT_CATEGORIES = new Set(["Fruits", "Vegetables", "Dairy"]);
@@ -82,6 +82,23 @@ function getExpiryPriority(product) {
   if (reason.includes("3 day")) return 3;
   if (reason.includes("expir")) return 4;
   return 99;
+}
+
+function getDisplayPriceReason(product) {
+  const raw = String(product.price_reason || "").trim();
+  if (!raw) return "";
+
+  const stock = Number(product.stock_quantity || 0);
+  if (stock > 0) {
+    return raw
+      .replace(/out of stock[^;]*;?\s*/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^;\s*/, "")
+      .replace(/\s*;\s*$/, "")
+      .trim();
+  }
+
+  return raw;
 }
 
 function ExpiryBadge({ product, theme }) {
@@ -206,6 +223,7 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
   const isExpiring = (product.price_reason || "").toLowerCase().includes("expir");
   const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= 5;
   const isOutOfStock = product.stock_quantity === 0;
+  const displayReason = getDisplayPriceReason(product);
   const pctChange = product.base_price
     ? ((product.current_price - product.base_price) / product.base_price) * 100
     : 0;
@@ -355,14 +373,14 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
         )}
       </div>
 
-      {product.price_reason && (
+      {displayReason && (
         <p className={cx(
           "relative rounded-2xl border px-3 py-2 text-xs leading-relaxed",
           isDark
             ? "border-white/10 bg-slate-900/70 text-slate-300"
             : "border-slate-100 bg-slate-50/80 text-slate-500"
         )}>
-          {product.price_reason}
+          {displayReason}
         </p>
       )}
 
@@ -398,7 +416,7 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           )}
         >
-          Remove from cart
+          Remove from queue
         </button>
       ) : (
         <button
@@ -415,12 +433,12 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
           className={cx(
             "relative mt-1 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all",
             isDark
-              ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 disabled:bg-slate-800 disabled:text-slate-500"
-              : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400",
+              ? "bg-amber-300 text-zinc-950 hover:bg-amber-200 disabled:bg-slate-800 disabled:text-slate-500"
+              : "bg-stone-900 text-white hover:bg-stone-800 disabled:bg-slate-200 disabled:text-slate-400",
             "disabled:cursor-not-allowed"
           )}
         >
-          {isLowStock ? "Add - almost gone" : "Add to cart"}
+          {isLowStock ? "Queue urgently" : "Add to dispatch queue"}
         </button>
       )}
     </div>
@@ -482,16 +500,16 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
             </svg>
           </div>
           <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
-            Order placed
+            Dispatch request sent
           </p>
           <p className={cx("mt-2 text-sm", isDark ? "text-slate-400" : "text-slate-500")}>
-            Rs. {result.data.total_amount.toFixed(2)} and Kafka is updating prices.
+            Rs. {result.data.total_amount.toFixed(2)} confirmed. Event streams are updating allocations.
           </p>
           <button
             onClick={() => setResult(null)}
-            className={cx("mt-4 text-sm font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}
+            className={cx("mt-4 text-sm font-semibold", isDark ? "text-amber-200" : "text-stone-900")}
           >
-            Place another
+            Create another request
           </button>
         </div>
       </div>
@@ -502,10 +520,10 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
     return (
       <div className={panelClass}>
         <p className={cx("text-sm font-medium", isDark ? "text-slate-300" : "text-slate-600")}>
-          Cart is empty
+          Dispatch queue is empty
         </p>
         <p className={cx("mt-1 text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
-          Add products to watch the live pricing loop continue.
+          Add items to generate demand signals and dispatch actions.
         </p>
       </div>
     );
@@ -516,7 +534,7 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
-            Cart
+            Dispatch queue
           </p>
           <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
             {cart.length} unique item{cart.length === 1 ? "" : "s"}
@@ -524,7 +542,7 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
         </div>
         <div className={cx(
           "rounded-full px-3 py-1 text-xs font-semibold",
-          isDark ? "bg-cyan-400/15 text-cyan-200" : "bg-cyan-50 text-cyan-700"
+          isDark ? "bg-teal-400/15 text-teal-200" : "bg-teal-100 text-teal-800"
         )}>
           Rs. {total.toFixed(2)}
         </div>
@@ -569,8 +587,8 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
           className={cx(
             "w-full rounded-2xl border px-4 py-3 text-sm outline-none transition-colors",
             isDark
-              ? "border-white/10 bg-slate-900/80 text-slate-100 focus:border-cyan-300/40"
-              : "border-slate-200 bg-white text-slate-800 focus:border-cyan-400"
+              ? "border-white/10 bg-slate-900/80 text-slate-100 focus:border-amber-300/40"
+              : "border-slate-200 bg-white text-slate-800 focus:border-amber-500"
           )}
         >
           <option value={1}>Hyderabad</option>
@@ -601,17 +619,17 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
             className={cx(
               "mt-4 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all",
               isDark
-                ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300 disabled:bg-slate-800 disabled:text-slate-500"
-                : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+                ? "bg-amber-300 text-zinc-950 hover:bg-amber-200 disabled:bg-slate-800 disabled:text-slate-500"
+                : "bg-stone-900 text-white hover:bg-stone-800 disabled:bg-slate-200 disabled:text-slate-400"
             )}
           >
-            {loading ? "Placing..." : "Place order"}
+            {loading ? "Submitting..." : "Submit dispatch order"}
           </button>
           <button
             onClick={clearCart}
             className={cx("mt-3 w-full text-xs font-medium", isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800")}
           >
-            Clear cart
+            Clear queue
           </button>
         </div>
       </div>
@@ -619,13 +637,15 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
   );
 }
 
-export default function ProductsPage({ cart, addToCart, removeFromCart, clearCart, showToast, theme }) {
+export default function ProductsPage({ cart, addToCart, removeFromCart, clearCart, showToast, theme, goToLiveOrders }) {
   const isDark = theme === "dark";
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState("All");
+  const [stockView, setStockView] = useState("in_stock");
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [liveOrderItems, setLiveOrderItems] = useState([]);
   const [clickCounts, setClickCounts] = useState({});
   const priceDropNotifiedRef = useRef({});
   const showToastRef = useRef(showToast);
@@ -672,10 +692,10 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
 
         for (const droppedProduct of dropAlerts.slice(0, 2)) {
           showToastRef.current?.(
-            `Price dropped: ${droppedProduct.name} is now Rs. ${Number(droppedProduct.current_price).toFixed(2)} (near expiry)`,
+            `Price reduced: ${droppedProduct.name} is now Rs. ${Number(droppedProduct.current_price).toFixed(2)} (near expiry)`,
             "success",
             {
-              actionLabel: "Add to cart",
+              actionLabel: "Queue item",
               onAction: () => addToCartRef.current?.(droppedProduct),
             }
           );
@@ -692,11 +712,26 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
     }
   }, []);
 
+  const fetchLiveOrderItems = useCallback(async () => {
+    try {
+      const { data } = await getLiveOrderItems(300);
+      setLiveOrderItems(Array.isArray(data) ? data : []);
+    } catch {
+      // keep UI resilient when orders feed is unavailable
+    }
+  }, []);
+
   useEffect(() => {
     fetchProducts();
     const id = setInterval(fetchProducts, 5000);
     return () => clearInterval(id);
   }, [fetchProducts]);
+
+  useEffect(() => {
+    fetchLiveOrderItems();
+    const id = setInterval(fetchLiveOrderItems, 4000);
+    return () => clearInterval(id);
+  }, [fetchLiveOrderItems]);
 
   const handleProductView = useCallback((product) => {
     setClickCounts((prev) => ({ ...prev, [product.product_id]: (prev[product.product_id] || 0) + 1 }));
@@ -704,7 +739,13 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
   }, []);
 
   const categories = ["All", ...new Set(products.map((product) => product.category_name))];
-  const filtered = filter === "All" ? products : products.filter((product) => product.category_name === filter);
+  const categoryFiltered = filter === "All" ? products : products.filter((product) => product.category_name === filter);
+  const filteredBase = stockView === "in_stock"
+    ? categoryFiltered.filter((product) => Number(product.stock_quantity || 0) > 0)
+    : categoryFiltered;
+  const filtered = [...filteredBase].sort((a, b) => Number(b.stock_quantity || 0) - Number(a.stock_quantity || 0));
+  const inStockCount = products.filter((product) => Number(product.stock_quantity || 0) > 0).length;
+  const outOfStockCount = products.filter((product) => Number(product.stock_quantity || 0) === 0).length;
   const categoryOrder = categories.filter((category) => category !== "All");
   const groupedProducts = categoryOrder
     .map((category) => ({
@@ -722,7 +763,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
       <div className="flex h-64 items-center justify-center">
         <div className={cx(
           "h-8 w-8 animate-spin rounded-full border-2 border-t-transparent",
-          isDark ? "border-cyan-300" : "border-slate-900"
+          isDark ? "border-amber-300" : "border-stone-900"
         )} />
       </div>
     );
@@ -732,7 +773,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
     return (
       <div className="mx-auto mt-16 max-w-md px-4 text-center">
         <p className={cx("text-sm", isDark ? "text-rose-300" : "text-rose-500")}>{error}</p>
-        <button onClick={fetchProducts} className={cx("mt-3 text-sm font-semibold", isDark ? "text-cyan-300" : "text-slate-900")}>
+        <button onClick={fetchProducts} className={cx("mt-3 text-sm font-semibold", isDark ? "text-amber-200" : "text-stone-900")}>
           Retry
         </button>
       </div>
@@ -751,15 +792,15 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
               <div>
                 <span className={cx(
                   "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
-                  isDark ? "bg-cyan-400/10 text-cyan-200" : "bg-cyan-50 text-cyan-700"
+                  isDark ? "bg-amber-400/15 text-amber-100" : "bg-amber-100 text-amber-800"
                 )}>
-                  Live shop
+                  Warehouse floor
                 </span>
                 <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
-                  Demand-reactive storefront
+                  Live stock and dispatch workspace
                 </h1>
                 <p className={cx("mt-3 max-w-2xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-                  Prices refresh every 5 seconds. Product clicks still send demand events into Kafka, while this layer focuses on clearer hierarchy, stronger contrast, and a proper dark mode.
+                  Prices, demand, and stock visibility refresh every 5 seconds. Each interaction emits warehouse demand events so operations teams can plan procurement and dispatch in real time.
                 </p>
               </div>
 
@@ -791,10 +832,10 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                   isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50"
                 )}>
                   <p className={cx("text-[11px] uppercase tracking-[0.2em]", isDark ? "text-slate-500" : "text-slate-400")}>
-                    In cart
+                    In stock
                   </p>
                   <p className={cx("mt-2 text-2xl font-black", isDark ? "text-white" : "text-slate-900")}>
-                    {cart.length}
+                    {inStockCount}
                   </p>
                 </div>
               </div>
@@ -802,11 +843,11 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
 
             <div className={cx(
               "mt-6 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
-              isDark ? "border-cyan-400/15 bg-cyan-400/10 text-cyan-100" : "border-cyan-100 bg-cyan-50 text-cyan-800"
+              isDark ? "border-teal-300/20 bg-teal-400/10 text-teal-100" : "border-teal-200 bg-teal-50 text-teal-900"
             )}>
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <p>
-                System is live. Click a product card to emit a Kafka demand event and watch pricing react.
+                Warehouse telemetry is live. Click any SKU card to emit a demand event and track downstream pricing and allocation shifts.
                 {lastRefresh && ` Last refresh: ${lastRefresh.toLocaleTimeString()}`}
               </p>
             </div>
@@ -863,8 +904,8 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                         className={cx(
                           "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
                           isDark
-                            ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
-                            : "bg-slate-900 text-white hover:bg-slate-800"
+                            ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
+                            : "bg-stone-900 text-white hover:bg-stone-800"
                         )}
                       >
                         Add
@@ -888,6 +929,42 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             isDark ? "scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent" : ""
           )}>
             <div className="flex w-max min-w-full flex-nowrap gap-2">
+              <button
+                onClick={() => setStockView("in_stock")}
+                className={cx(
+                  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all",
+                  stockView === "in_stock"
+                    ? isDark
+                      ? "bg-emerald-400 text-zinc-950"
+                      : "bg-emerald-700 text-white"
+                    : isDark
+                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                      : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
+                )}
+              >
+                In stock ({inStockCount})
+              </button>
+              <button
+                onClick={() => setStockView("all")}
+                className={cx(
+                  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all",
+                  stockView === "all"
+                    ? isDark
+                      ? "bg-amber-300 text-zinc-950"
+                      : "bg-stone-900 text-white"
+                    : isDark
+                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                      : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
+                )}
+              >
+                All SKUs ({products.length})
+              </button>
+              <span className={cx(
+                "shrink-0 rounded-full px-3 py-2 text-xs font-semibold",
+                isDark ? "bg-rose-500/12 text-rose-200" : "bg-rose-100 text-rose-700"
+              )}>
+                Out of stock: {outOfStockCount}
+              </span>
               {categories.map((category) => (
                 <button
                   key={category}
@@ -896,8 +973,8 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                     "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all",
                     filter === category
                       ? isDark
-                        ? "bg-cyan-400 text-slate-950"
-                        : "bg-slate-900 text-white"
+                        ? "bg-amber-300 text-zinc-950"
+                        : "bg-stone-900 text-white"
                       : isDark
                         ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
                         : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
@@ -966,7 +1043,9 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                 "rounded-3xl border px-5 py-8 text-center text-sm",
                 isDark ? "border-white/10 bg-white/[0.03] text-slate-300" : "border-slate-200 bg-white/80 text-slate-600"
               )}>
-                No products found for this category.
+                {stockView === "in_stock"
+                  ? "No in-stock SKUs for this category."
+                  : "No SKUs found for this category."}
               </div>
             )}
           </div>
@@ -978,7 +1057,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             removeFromCart={removeFromCart}
             clearCart={clearCart}
             onOrderPlaced={() => {
-              showToast("Order sent to Kafka - prices updating!");
+              showToast("Dispatch request sent - warehouse pricing model updating.");
               setTimeout(fetchProducts, 3000);
             }}
             theme={theme}
@@ -988,11 +1067,65 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
             isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
           )}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
+                Live order products
+              </p>
+              <button
+                onClick={() => goToLiveOrders?.()}
+                className={cx(
+                  "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                  isDark ? "bg-amber-300 text-zinc-950 hover:bg-amber-200" : "bg-stone-900 text-white hover:bg-stone-800"
+                )}
+              >
+                Open full view
+              </button>
+            </div>
+            {liveOrderItems.length === 0 ? (
+              <p className={cx("text-sm", isDark ? "text-slate-400" : "text-slate-600")}>
+                No live order products yet.
+              </p>
+            ) : (
+              <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                {liveOrderItems.map((line, idx) => (
+                  <div
+                    key={`${line.order_id}-${line.product_id}-${line.timestamp}-${idx}`}
+                    className={cx(
+                      "flex items-center justify-between rounded-xl border px-3 py-2",
+                      isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/80"
+                    )}
+                  >
+                    <div>
+                      <p className={cx("text-xs font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>
+                        #{String(line.order_id).padStart(5, "0")} · {line.product_name}
+                      </p>
+                      <p className={cx("text-[11px]", isDark ? "text-slate-400" : "text-slate-500")}>
+                        Qty {line.quantity} · Rs. {Number(line.selling_price || 0).toFixed(2)} each
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={cx("text-xs font-semibold", isDark ? "text-amber-200" : "text-amber-700")}>
+                        Rs. {Number(line.line_total || 0).toFixed(2)}
+                      </p>
+                      <p className={cx("text-[11px]", isDark ? "text-slate-500" : "text-slate-400")}>
+                        {line.timestamp ? new Date(line.timestamp).toLocaleTimeString() : "--"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={cx(
+            "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
+            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+          )}>
             <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
-              Demo tip
+              Ops tip
             </p>
             <p className={cx("mt-2 text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-              Click the same product 5 to 10 times rapidly. Each click still emits a demand event and the consumer should push a visible price move within seconds.
+              Trigger the same SKU 5 to 10 times in a burst. The demand stream should raise pressure and you should see a visible price adjustment within seconds.
             </p>
           </div>
         </div>
