@@ -30,7 +30,7 @@ export default function SortableRiskTable({ rows, sortBy, sortDirection, onSort,
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.product}-${row.location}`} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+            <tr key={`${row.product}-${row.location}`} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/70")}>
               <td className={cx("px-2 py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{row.product}</td>
               <td className={cx("px-2 py-3", isDark ? "text-slate-300" : "text-slate-600")}>{row.category}</td>
               <td className={cx("px-2 py-3 font-semibold", row.risk > 75 ? (isDark ? "text-rose-300" : "text-rose-700") : row.risk > 50 ? (isDark ? "text-amber-300" : "text-amber-700") : (isDark ? "text-emerald-300" : "text-emerald-700"))}>{row.risk.toFixed(1)}</td>

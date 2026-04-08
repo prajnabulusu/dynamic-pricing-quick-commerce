@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   getDashboardStats,
   getNearExpiry,
@@ -7,7 +7,6 @@ import {
   getPriceHistory,
   getPriceSeries,
   getViewSeries,
-  getRecentOrders,
   getAllPrices,
   simulateSpike,
 } from "../api";
@@ -15,7 +14,6 @@ import axios from "axios";
 
 const api = axios.create({ baseURL: "http://localhost:8000", timeout: 10000 });
 const getWeather = () => api.get("/phase-b/weather");
-const getColdChainAlerts = () => api.get("/phase-b/cold-chain/alerts");
 const getSocialImpact = () => api.get("/phase-b/social-impact");
 const getPerishableLife = () => api.get("/phase-b/perishable-lifecycle");
 
@@ -142,7 +140,7 @@ function Section({ title, children, right, theme }) {
   return (
     <section className={cx(
       "overflow-hidden rounded-[30px] border shadow-[0_18px_60px_rgba(15,23,42,0.10)]",
-      isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+      isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
     )}>
       <div className={cx(
         "flex items-center justify-between gap-3 border-b px-5 py-4",
@@ -153,22 +151,6 @@ function Section({ title, children, right, theme }) {
       </div>
       <div className="p-5">{children}</div>
     </section>
-  );
-}
-
-function SeverityPill({ severity, theme }) {
-  const isDark = theme === "dark";
-  const map = {
-    critical: isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700",
-    major: isDark ? "bg-orange-500/15 text-orange-200" : "bg-orange-100 text-orange-700",
-    minor: isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700",
-    none: isDark ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700",
-  };
-
-  return (
-    <span className={cx("rounded-full px-2.5 py-1 text-xs font-semibold capitalize", map[severity] || (isDark ? "bg-slate-700 text-slate-200" : "bg-slate-100 text-slate-600"))}>
-      {severity}
-    </span>
   );
 }
 
@@ -215,7 +197,7 @@ function SpikeSimulator({ products, theme, onSimulated }) {
   return (
     <div className="space-y-4">
       <p className={cx("text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-        Generate synthetic demand for a selected SKU and validate that warehouse pricing reacts without changing backend logic.
+        Create extra demand for a product to test live pricing.
       </p>
       <select
         value={selectedId}
@@ -250,7 +232,7 @@ function SpikeSimulator({ products, theme, onSimulated }) {
             : "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
         )}
       >
-        {loading ? "Sending spike..." : `Send ${count} demand events`}
+        {loading ? "Sending..." : `Send ${count} events`}
       </button>
       {result && (
         <p className={cx("text-xs font-medium", result.success ? (isDark ? "text-emerald-300" : "text-emerald-600") : (isDark ? "text-rose-300" : "text-rose-500"))}>
@@ -266,10 +248,10 @@ function WeatherSimulationPanel({ draft, onDraftChange, onApply, onClear, active
   const mode = resolveWeatherMode(activeSimulation);
 
   return (
-    <div className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
-      <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>Weather simulation control</p>
+    <div className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90")}>
+      <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>Weather simulation</p>
       <p className={cx("mt-2 text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-        Simulate weather impact and apply it to pricing. Press Apply to jump directly to Live Pricing.
+        Set weather and apply it to prices.
       </p>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -365,7 +347,7 @@ function PerishableLifecycle({ items, theme }) {
         </thead>
         <tbody>
           {items.map((item, index) => (
-            <tr key={index} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/80")}>
+            <tr key={index} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/80")}>
               <td className={cx("py-3 font-medium", isDark ? "text-slate-100" : "text-slate-800")}>{item.product}</td>
               <td className={cx("py-3 font-mono text-xs", isDark ? "text-slate-400" : "text-slate-400")}>{item.batch_code || "-"}</td>
               <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{item.quantity}</td>
@@ -649,10 +631,8 @@ export default function AdminDashboard({ theme }) {
   const [rescueSummary, setRescueSummary] = useState(null);
   const [rescueOnboarding, setRescueOnboarding] = useState([]);
   const [rescueAnalytics, setRescueAnalytics] = useState(null);
-  const [orders, setOrders] = useState([]);
   const [prices, setPrices] = useState([]);
   const [weather, setWeather] = useState([]);
-  const [coldAlerts, setColdAlerts] = useState([]);
   const [impact, setImpact] = useState(null);
   const [perishLife, setPerishLife] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -678,15 +658,13 @@ export default function AdminDashboard({ theme }) {
   const pricesSigRef = useRef("");
 
   const fetchAll = useCallback(async () => {
-    const [s, e, r, rr, o, p, w, ca, si, pl] = await Promise.allSettled([
+    const [s, e, r, rr, p, w, si, pl] = await Promise.allSettled([
       getDashboardStats(),
       getNearExpiry(),
       getRedistribution(),
       getRescueRouting(),
-      getRecentOrders(),
       getAllPrices(),
       getWeather(),
-      getColdChainAlerts(),
       getSocialImpact(),
       getPerishableLife(),
     ]);
@@ -700,7 +678,6 @@ export default function AdminDashboard({ theme }) {
       setRescueOnboarding(rr.value.data.onboarding || []);
       setRescueAnalytics(rr.value.data.analytics || null);
     }
-    if (o.status === "fulfilled") setOrders(o.value.data);
     if (p.status === "fulfilled") {
       const nextPrices = p.value.data || [];
       const nextSig = nextPrices
@@ -712,7 +689,6 @@ export default function AdminDashboard({ theme }) {
       }
     }
     if (w.status === "fulfilled") setWeather(w.value.data);
-    if (ca.status === "fulfilled") setColdAlerts(ca.value.data);
     if (si.status === "fulfilled") setImpact(si.value.data);
     if (pl.status === "fulfilled") setPerishLife(pl.value.data);
     setLastRefresh(new Date());
@@ -789,14 +765,13 @@ export default function AdminDashboard({ theme }) {
   );
 
   const tabs = [
-    { id: "overview", label: "Operations Overview" },
-    { id: "pricing", label: "Dynamic Pricing" },
-    { id: "perishable", label: "Shelf-Life Control" },
-    { id: "weather", label: "Weather Signals" },
-    { id: "coldchain", label: "Cold Chain" },
-    { id: "impact", label: "Impact Ledger" },
-    { id: "rescue", label: "Rescue Routing" },
-    { id: "simulator", label: "Demand Lab" },
+    { id: "overview", label: "Overview" },
+    { id: "pricing", label: "Pricing" },
+    { id: "perishable", label: "Perishables" },
+    { id: "weather", label: "Weather" },
+    { id: "impact", label: "Impact" },
+    { id: "rescue", label: "Rescue" },
+    { id: "simulator", label: "Demand Test" },
   ];
 
   if (loading) {
@@ -811,7 +786,7 @@ export default function AdminDashboard({ theme }) {
     <div className="mx-auto max-w-7xl px-4 py-8">
       <section className={cx(
         "overflow-hidden rounded-[34px] border p-6 shadow-[0_20px_70px_rgba(15,23,42,0.10)]",
-        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+        isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
       )}>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-end">
           <div>
@@ -819,13 +794,13 @@ export default function AdminDashboard({ theme }) {
               "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
               isDark ? "bg-violet-400/12 text-violet-200" : "bg-violet-50 text-violet-700"
             )}>
-              Warehouse command plane
+              Dashboard
             </span>
             <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
-              Enterprise visibility for pricing, freshness, routing, and events
+              Pricing, stock, and operations
             </h1>
             <p className={cx("mt-3 max-w-3xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-              A single operational view for organizations running warehouse networks, from demand pressure and pricing decisions to cold-chain compliance and rescue routing.
+              One place to track pricing, inventory, and operations.
             </p>
           </div>
 
@@ -843,27 +818,11 @@ export default function AdminDashboard({ theme }) {
           </div>
         </div>
 
-        {coldAlerts.length > 0 && (
-          <div className={cx(
-            "mt-6 flex items-start gap-4 rounded-2xl border px-4 py-4",
-            isDark ? "border-rose-400/15 bg-rose-500/10" : "border-rose-100 bg-rose-50"
-          )}>
-            <div className={cx("mt-1 h-2.5 w-2.5 rounded-full", isDark ? "bg-rose-300" : "bg-rose-500")} />
-            <div>
-              <p className={cx("text-sm font-semibold", isDark ? "text-rose-100" : "text-rose-700")}>
-                {coldAlerts.length} cold chain breach{coldAlerts.length > 1 ? "es" : ""} detected
-              </p>
-              <p className={cx("mt-1 text-xs", isDark ? "text-rose-200/80" : "text-rose-600")}>
-                {coldAlerts.filter((item) => item.severity === "critical").length} critical and {coldAlerts.filter((item) => item.severity === "major").length} major alerts are currently active.
-              </p>
-            </div>
-          </div>
-        )}
       </section>
 
       <div className={cx(
         "mt-6 flex gap-2 overflow-x-auto rounded-[26px] border p-2 whitespace-nowrap",
-        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/80"
+        isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/80"
       )}>
         {tabs.map((tab) => (
           <button
@@ -877,11 +836,6 @@ export default function AdminDashboard({ theme }) {
             )}
           >
             {tab.label}
-            {tab.id === "coldchain" && coldAlerts.length > 0 && (
-              <span className={cx("ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold", isDark ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700")}>
-                {coldAlerts.length}
-              </span>
-            )}
           </button>
         ))}
         <button onClick={fetchAll} className={cx("ml-auto shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold", isDark ? "text-amber-200" : "text-stone-900")}>
@@ -952,32 +906,6 @@ export default function AdminDashboard({ theme }) {
             </Section>
           </div>
 
-          <Section title="Recent orders" theme={theme}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className={cx("border-b text-xs uppercase tracking-[0.18em]", isDark ? "border-white/10 text-slate-500" : "border-slate-100 text-slate-400")}>
-                    <th className="pb-3 text-left font-medium">Order</th>
-                    <th className="pb-3 text-left font-medium">Time</th>
-                    <th className="pb-3 text-left font-medium">City</th>
-                    <th className="pb-3 text-right font-medium">Items</th>
-                    <th className="pb-3 text-right font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((order) => (
-                    <tr key={order.order_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
-                      <td className={cx("py-3 font-mono text-xs", isDark ? "text-slate-400" : "text-slate-400")}>#{String(order.order_id).padStart(5, "0")}</td>
-                      <td className={cx("py-3 text-xs", isDark ? "text-slate-300" : "text-slate-600")}>{new Date(order.timestamp).toLocaleTimeString()}</td>
-                      <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{order.city || "-"}</td>
-                      <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{order.item_count}</td>
-                      <td className={cx("py-3 text-right font-semibold", isDark ? "text-white" : "text-slate-800")}>Rs. {order.total_amount.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
         </div>
       )}
 
@@ -1018,7 +946,7 @@ export default function AdminDashboard({ theme }) {
                         className={cx(
                           "cursor-pointer border-b last:border-0",
                           product.weather_adjusted && (isDark ? "bg-cyan-500/8" : "bg-cyan-50/70"),
-                          isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70"
+                          isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/70"
                         )}
                       >
                         <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{product.name}</td>
@@ -1077,7 +1005,7 @@ export default function AdminDashboard({ theme }) {
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {weather.map((item) => (
-              <div key={item.city} className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+              <div key={item.city} className={cx("rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>{item.city}</p>
@@ -1109,43 +1037,9 @@ export default function AdminDashboard({ theme }) {
           </div>
           {weather.length === 0 && (
             <div className={cx("rounded-2xl border px-4 py-4 text-sm", isDark ? "border-amber-400/15 bg-amber-500/10 text-amber-200" : "border-amber-100 bg-amber-50 text-amber-700")}>
-              No weather data yet. Run <code>python scripts/weather_events_simulator.py</code>.
+              No weather data yet.
             </div>
           )}
-        </div>
-      )}
-
-      {activeTab === "coldchain" && (
-        <div className="mt-6 space-y-6">
-          {coldAlerts.length > 0 && (
-            <Section title="Active breach alerts" theme={theme}>
-              <div className="space-y-3">
-                {coldAlerts.map((alert, index) => (
-                  <div key={index} className={cx("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3", isDark ? "border-white/8 bg-slate-900/70" : "border-slate-100 bg-slate-50/70")}>
-                    <div>
-                      <p className={cx("text-sm font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{alert.product}</p>
-                      <p className={cx("mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{alert.store} · {alert.city}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className={cx("text-sm font-semibold", isDark ? "text-rose-300" : "text-rose-600")}>{alert.actual_temp} C</p>
-                        <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>required {"<="} {alert.required_temp} C</p>
-                      </div>
-                      <SeverityPill severity={alert.severity} theme={theme} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-          {coldAlerts.length === 0 && (
-            <div className={cx("rounded-2xl border px-4 py-4 text-sm", isDark ? "border-emerald-400/15 bg-emerald-500/10 text-emerald-200" : "border-emerald-100 bg-emerald-50 text-emerald-700")}>
-              No active cold chain breaches. All products are within range.
-            </div>
-          )}
-          <div className={cx("rounded-2xl border px-4 py-4 text-xs leading-6", isDark ? "border-amber-400/15 bg-amber-500/10 text-amber-200" : "border-amber-100 bg-amber-50 text-amber-700")}>
-            Run <code>python scripts/cold_chain_monitor.py</code> to keep continuous temperature monitoring active.
-          </div>
         </div>
       )}
 
@@ -1228,7 +1122,7 @@ export default function AdminDashboard({ theme }) {
                   </thead>
                   <tbody>
                     {rescueRouting.map((item) => (
-                      <tr key={`${item.batch_id}-${item.product_id}`} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                      <tr key={`${item.batch_id}-${item.product_id}`} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/70")}>
                         <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{item.product_name}</td>
                         <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{item.category_name}</td>
                         <td className={cx("py-3 text-right", isDark ? "text-slate-300" : "text-slate-600")}>{item.quantity}</td>
@@ -1332,7 +1226,7 @@ export default function AdminDashboard({ theme }) {
                   </thead>
                   <tbody>
                     {(rescueAnalytics.partner_utilization || []).map((p) => (
-                      <tr key={p.partner_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70")}>
+                      <tr key={p.partner_id} className={cx("border-b last:border-0", isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/70")}>
                         <td className={cx("py-3 font-semibold", isDark ? "text-slate-100" : "text-slate-800")}>{p.partner_name}</td>
                         <td className={cx("py-3 text-xs uppercase", isDark ? "text-slate-400" : "text-slate-500")}>{p.partner_type}</td>
                         <td className={cx("py-3", isDark ? "text-slate-300" : "text-slate-600")}>{p.partner_city}</td>
@@ -1380,7 +1274,7 @@ export default function AdminDashboard({ theme }) {
               }}
             />
           </Section>
-          <div className={cx("rounded-[30px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+          <div className={cx("rounded-[30px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90")}>
             <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>What this validates</p>
             <p className={cx("mt-3 text-sm leading-7", isDark ? "text-slate-300" : "text-slate-600")}>
               The simulator calls <code>/events/spike-simulator/{"{id}"}</code> and floods the <code>demand_events</code> Kafka topic. When demand crosses the threshold, repricing triggers automatically. Switch to the Operations Floor to observe the new price propagation.
@@ -1403,6 +1297,7 @@ export default function AdminDashboard({ theme }) {
     </div>
   );
 }
+
 
 
 

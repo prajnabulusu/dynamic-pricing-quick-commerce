@@ -77,7 +77,7 @@ export default function LiveOrdersPage({ theme }) {
     <div className="w-full px-4 py-8">
       <section className={cx(
         "rounded-[30px] border p-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)]",
-        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+        isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
       )}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -88,10 +88,10 @@ export default function LiveOrdersPage({ theme }) {
               Live Orders
             </span>
             <h1 className={cx("mt-3 text-3xl font-black tracking-tight", isDark ? "text-white" : "text-slate-900")}>
-              Full Order Product Stream
+              Live Orders
             </h1>
             <p className={cx("mt-2 text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
-              Every product line produced by `order_producer.py`, in one continuous live view.
+              All order rows in one live view.
             </p>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function LiveOrdersPage({ theme }) {
 
       <section className={cx(
         "mt-5 rounded-[30px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
-        isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+        isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
       )}>
         {filteredRows.length === 0 ? (
           <p className={cx("px-2 py-10 text-center text-sm", isDark ? "text-slate-400" : "text-slate-500")}>
@@ -151,7 +151,7 @@ export default function LiveOrdersPage({ theme }) {
                     key={`${row.order_id}-${row.product_id}-${row.timestamp}-${idx}`}
                     className={cx(
                       "border-b last:border-0 transition-colors duration-700",
-                      isDark ? "border-white/6 hover:bg-white/[0.03]" : "border-slate-50 hover:bg-slate-50/70",
+                      isDark ? "border-white/6 hover:bg-slate-800/70" : "border-slate-50 hover:bg-slate-50/70",
                       isFlashing && (isDark ? "bg-emerald-400/20" : "bg-emerald-100")
                     )}
                   >
@@ -185,3 +185,4 @@ export default function LiveOrdersPage({ theme }) {
     </div>
   );
 }
+

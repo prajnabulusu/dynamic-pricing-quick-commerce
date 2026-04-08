@@ -23,11 +23,11 @@ export default function AnalyticsFilterBar({ filters, options, onChange, onReset
   const isDark = theme === "dark";
 
   return (
-    <section className={cx("rounded-[30px] border p-5", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/95")}>
+    <section className={cx("rounded-[30px] border p-5", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/95")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className={cx("text-base font-bold", isDark ? "text-white" : "text-slate-900")}>Analytics Control Plane</h2>
-          <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Schema-flexible filters for pricing, margin, risk, and operations analysis.</p>
+          <h2 className={cx("text-base font-bold", isDark ? "text-white" : "text-slate-900")}>Filters</h2>
+          <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Use filters to focus on the data you need.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onRefresh} className={cx("rounded-xl px-3 py-2 text-xs font-semibold", isDark ? "bg-amber-300 text-zinc-950" : "bg-slate-900 text-white")}>Refresh</button>
@@ -60,3 +60,4 @@ export default function AnalyticsFilterBar({ filters, options, onChange, onReset
     </section>
   );
 }
+

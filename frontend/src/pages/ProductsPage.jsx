@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getProducts, placeOrder, recordEvent, getViewStats, getLiveOrderItems } from "../api";
 
 const SESSION_ID = Math.random().toString(36).slice(2, 10);
@@ -248,7 +248,7 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
       className={cx(
         "group relative flex h-full cursor-pointer select-none flex-col gap-3 overflow-hidden rounded-[26px] border p-4 transition-all duration-300",
         isDark
-          ? "bg-white/[0.04] hover:-translate-y-1 hover:border-cyan-300/20 hover:bg-white/[0.06]"
+          ? "bg-slate-900/72 hover:-translate-y-1 hover:border-cyan-300/20 hover:bg-slate-900/85"
           : "bg-white/85 hover:-translate-y-1 hover:border-cyan-200 hover:bg-white hover:shadow-[0_18px_40px_rgba(148,163,184,0.18)]",
         shellClass
       )}
@@ -412,7 +412,7 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
           className={cx(
             "relative mt-1 w-full rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors",
             isDark
-              ? "border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
+              ? "border-slate-700/70 bg-slate-900/68 text-slate-100 hover:bg-white/[0.08]"
               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           )}
         >
@@ -438,7 +438,7 @@ function ProductCard({ product, inCart, onAdd, onRemove, onView, clickCount, the
             "disabled:cursor-not-allowed"
           )}
         >
-          {isLowStock ? "Queue urgently" : "Add to dispatch queue"}
+          {isLowStock ? "Add now" : "Add to cart"}
         </button>
       )}
     </div>
@@ -484,7 +484,7 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
 
   const panelClass = cx(
     "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
-    isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+    isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
   );
 
   if (result?.success) {
@@ -500,16 +500,16 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
             </svg>
           </div>
           <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
-            Dispatch request sent
+            Order placed
           </p>
           <p className={cx("mt-2 text-sm", isDark ? "text-slate-400" : "text-slate-500")}>
-            Rs. {result.data.total_amount.toFixed(2)} confirmed. Event streams are updating allocations.
+            Rs. {result.data.total_amount.toFixed(2)} confirmed.
           </p>
           <button
             onClick={() => setResult(null)}
             className={cx("mt-4 text-sm font-semibold", isDark ? "text-amber-200" : "text-stone-900")}
           >
-            Create another request
+            Create another order
           </button>
         </div>
       </div>
@@ -520,10 +520,10 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
     return (
       <div className={panelClass}>
         <p className={cx("text-sm font-medium", isDark ? "text-slate-300" : "text-slate-600")}>
-          Dispatch queue is empty
+          Cart is empty
         </p>
         <p className={cx("mt-1 text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
-          Add items to generate demand signals and dispatch actions.
+          Add items to place an order.
         </p>
       </div>
     );
@@ -534,7 +534,7 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className={cx("text-lg font-semibold", isDark ? "text-white" : "text-slate-900")}>
-            Dispatch queue
+            Cart
           </p>
           <p className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
             {cart.length} unique item{cart.length === 1 ? "" : "s"}
@@ -623,13 +623,13 @@ function CartPanel({ cart, removeFromCart, clearCart, onOrderPlaced, theme }) {
                 : "bg-stone-900 text-white hover:bg-stone-800 disabled:bg-slate-200 disabled:text-slate-400"
             )}
           >
-            {loading ? "Submitting..." : "Submit dispatch order"}
+            {loading ? "Submitting..." : "Place order"}
           </button>
           <button
             onClick={clearCart}
             className={cx("mt-3 w-full text-xs font-medium", isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800")}
           >
-            Clear queue
+            Clear cart
           </button>
         </div>
       </div>
@@ -786,7 +786,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
         <div className="min-w-0 space-y-6">
           <section className={cx(
             "overflow-hidden rounded-[32px] border p-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)]",
-            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+            isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
           )}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
               <div>
@@ -794,13 +794,13 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                   "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
                   isDark ? "bg-amber-400/15 text-amber-100" : "bg-amber-100 text-amber-800"
                 )}>
-                  Warehouse floor
+                  Store
                 </span>
                 <h1 className={cx("mt-4 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>
-                  Live stock and dispatch workspace
+                  Live stock and prices
                 </h1>
                 <p className={cx("mt-3 max-w-2xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-                  Prices, demand, and stock visibility refresh every 5 seconds. Each interaction emits warehouse demand events so operations teams can plan procurement and dispatch in real time.
+                  Prices, demand, and stock refresh every 5 seconds.
                 </p>
               </div>
 
@@ -847,7 +847,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             )}>
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <p>
-                Warehouse telemetry is live. Click any SKU card to emit a demand event and track downstream pricing and allocation shifts.
+                Live updates are on. Click a product card to track activity.
                 {lastRefresh && ` Last refresh: ${lastRefresh.toLocaleTimeString()}`}
               </p>
             </div>
@@ -868,7 +868,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                   Expiring Soon
                 </p>
                 <p className={cx("mt-2 text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
-                  Fast-moving markdowns across perishables and short-shelf categories.
+                  Products that are close to expiry.
                 </p>
               </div>
               <span className={cx("text-xs font-semibold", isDark ? "text-orange-200" : "text-orange-700")}>
@@ -884,7 +884,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                       key={`expiring-item-${product.product_id}`}
                       className={cx(
                         "flex shrink-0 items-center gap-3 rounded-xl border px-3 py-2",
-                        isDark ? "border-white/8 bg-white/[0.03]" : "border-slate-100 bg-slate-50/80"
+                        isDark ? "border-white/8 bg-slate-900/68" : "border-slate-100 bg-slate-50/80"
                       )}
                     >
                       <span className={cx(
@@ -917,7 +917,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             ) : (
               <div className={cx(
                 "rounded-2xl border px-4 py-4 text-sm",
-                isDark ? "border-white/10 bg-white/[0.03] text-slate-300" : "border-slate-100 bg-white/80 text-slate-600"
+                isDark ? "border-slate-700/70 bg-slate-900/68 text-slate-300" : "border-slate-100 bg-white/80 text-slate-600"
               )}>
                 No expiring products right now.
               </div>
@@ -938,7 +938,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                       ? "bg-emerald-400 text-zinc-950"
                       : "bg-emerald-700 text-white"
                     : isDark
-                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                      ? "border border-slate-700/70 bg-slate-900/68 text-slate-300 hover:bg-white/[0.07]"
                       : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
                 )}
               >
@@ -953,7 +953,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                       ? "bg-amber-300 text-zinc-950"
                       : "bg-stone-900 text-white"
                     : isDark
-                      ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                      ? "border border-slate-700/70 bg-slate-900/68 text-slate-300 hover:bg-white/[0.07]"
                       : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
                 )}
               >
@@ -976,7 +976,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                         ? "bg-amber-300 text-zinc-950"
                         : "bg-stone-900 text-white"
                       : isDark
-                        ? "border border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                        ? "border border-slate-700/70 bg-slate-900/68 text-slate-300 hover:bg-white/[0.07]"
                         : "border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white"
                   )}
                 >
@@ -1041,7 +1041,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             {groupedProducts.length === 0 && (
               <div className={cx(
                 "rounded-3xl border px-5 py-8 text-center text-sm",
-                isDark ? "border-white/10 bg-white/[0.03] text-slate-300" : "border-slate-200 bg-white/80 text-slate-600"
+                isDark ? "border-slate-700/70 bg-slate-900/68 text-slate-300" : "border-slate-200 bg-white/80 text-slate-600"
               )}>
                 {stockView === "in_stock"
                   ? "No in-stock SKUs for this category."
@@ -1057,7 +1057,7 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
             removeFromCart={removeFromCart}
             clearCart={clearCart}
             onOrderPlaced={() => {
-              showToast("Dispatch request sent - warehouse pricing model updating.");
+              showToast("Order placed. Prices will update shortly.");
               setTimeout(fetchProducts, 3000);
             }}
             theme={theme}
@@ -1065,11 +1065,11 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
 
           <div className={cx(
             "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
-            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+            isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
           )}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
-                Live order products
+                Live order items
               </p>
               <button
                 onClick={() => goToLiveOrders?.()}
@@ -1078,12 +1078,12 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
                   isDark ? "bg-amber-300 text-zinc-950 hover:bg-amber-200" : "bg-stone-900 text-white hover:bg-stone-800"
                 )}
               >
-                Open full view
+                Open page
               </button>
             </div>
             {liveOrderItems.length === 0 ? (
               <p className={cx("text-sm", isDark ? "text-slate-400" : "text-slate-600")}>
-                No live order products yet.
+              No live order items yet.
               </p>
             ) : (
               <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
@@ -1119,13 +1119,13 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
 
           <div className={cx(
             "rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]",
-            isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90"
+            isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90"
           )}>
             <p className={cx("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
-              Ops tip
+              Tip
             </p>
             <p className={cx("mt-2 text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-              Trigger the same SKU 5 to 10 times in a burst. The demand stream should raise pressure and you should see a visible price adjustment within seconds.
+              Click products multiple times to see demand and price changes faster.
             </p>
           </div>
         </div>
@@ -1133,4 +1133,5 @@ export default function ProductsPage({ cart, addToCart, removeFromCart, clearCar
     </div>
   );
 }
+
 

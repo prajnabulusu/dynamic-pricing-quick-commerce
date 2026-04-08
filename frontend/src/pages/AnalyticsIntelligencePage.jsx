@@ -155,16 +155,16 @@ export default function AnalyticsIntelligencePage({ theme }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
-      <section className={cx("rounded-[34px] border p-6", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/95")}>
+      <section className={cx("rounded-[34px] border p-6", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/95")}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <span className={cx("inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]", isDark ? "bg-cyan-400/15 text-cyan-100" : "bg-cyan-100 text-cyan-800")}>Retail Intelligence BI</span>
-            <h1 className={cx("mt-3 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>Analytics-First Dynamic Pricing Intelligence</h1>
+            <span className={cx("inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]", isDark ? "bg-cyan-400/15 text-cyan-100" : "bg-cyan-100 text-cyan-800")}>Analytics</span>
+            <h1 className={cx("mt-3 text-3xl font-black tracking-tight sm:text-4xl", isDark ? "text-white" : "text-slate-900")}>Pricing and Retail Analytics</h1>
             <p className={cx("mt-2 max-w-3xl text-sm leading-6", isDark ? "text-slate-300" : "text-slate-600")}>
-              Professional decision-support workspace for pricing behavior, profitability optimization, stock risk, demand shifts, and operational execution.
+              Track pricing, profit, demand, stock risk, and operations in one place.
             </p>
           </div>
-          <button onClick={exportSummary} className={cx("rounded-xl px-4 py-2 text-xs font-semibold", isDark ? "bg-amber-300 text-zinc-950" : "bg-slate-900 text-white")}>Download Summary CSV</button>
+          <button onClick={exportSummary} className={cx("rounded-xl px-4 py-2 text-xs font-semibold", isDark ? "bg-amber-300 text-zinc-950" : "bg-slate-900 text-white")}>Download Summary</button>
         </div>
         {error && <p className={cx("mt-3 text-xs", isDark ? "text-rose-200" : "text-rose-700")}>{error}</p>}
       </section>
@@ -179,7 +179,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
         theme={theme}
       />
 
-      <div className={cx("flex gap-2 overflow-x-auto rounded-2xl border p-2", isDark ? "border-white/10 bg-white/[0.04]" : "border-white bg-white/90")}>
+      <div className={cx("flex gap-2 overflow-x-auto rounded-2xl border p-2", isDark ? "border-slate-700/80 bg-slate-900/72" : "border-white bg-white/90")}>
         {DASHBOARD_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -199,7 +199,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
       {(activeTab === "overview" || activeTab === "insights") && (
         <AnalyticsSection
           title="Executive Overview"
-          subtitle="Premium KPI intelligence cards with period deltas and business context"
+          subtitle="Key metrics with quick comparisons"
           right={<span className={cx("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>{filteredRows.length} records in scope</span>}
           theme={theme}
         >
@@ -227,7 +227,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "pricing" || activeTab === "overview") && (
-        <AnalyticsSection title="Pricing Analytics" subtitle="Understand movement, elasticity proxies, and outcome quality of dynamic pricing" theme={theme}>
+        <AnalyticsSection title="Pricing Analytics" subtitle="Price trends and pricing impact" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartBlock title="Base vs Adjusted Price Trend" subtitle="Daily average pricing behavior" theme={theme}>
               <div className="h-72">
@@ -262,7 +262,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Demand vs Uplift Scatter" subtitle="Elasticity-style view by transaction points" theme={theme}>
+            <ChartBlock title="Demand vs Uplift" subtitle="How demand and uplift move together" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart>
@@ -276,7 +276,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Price Change Distribution" subtitle="Are updates too aggressive or too conservative?" theme={theme}>
+            <ChartBlock title="Price Change Distribution" subtitle="Distribution of price changes" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={priceDistribution}>
@@ -294,7 +294,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "profitability" || activeTab === "overview") && (
-        <AnalyticsSection title="Profitability Analytics" subtitle="Revenue-quality decomposition, concentration, and weak segment identification" theme={theme}>
+        <AnalyticsSection title="Profitability Analytics" subtitle="Profit trends and margin quality" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartBlock title="Revenue vs Profit Trend" subtitle="Daily financial trajectory" theme={theme}>
               <div className="h-72">
@@ -312,7 +312,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Margin Quality by Category" subtitle="Average margin and absolute profit comparison" theme={theme}>
+            <ChartBlock title="Margin by Category" subtitle="Average margin and profit" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={categoryRevenue.slice(0, 12)}>
@@ -333,7 +333,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "revenue" || activeTab === "overview") && (
-        <AnalyticsSection title="Revenue and Sales Performance" subtitle="Commercial trendline, top contributors, and realization" theme={theme}>
+        <AnalyticsSection title="Revenue and Sales" subtitle="Revenue trend and top contributors" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartBlock title="Revenue and Units Trend" subtitle="Daily commercial flow" theme={theme}>
               <div className="h-72">
@@ -352,7 +352,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Top Revenue Contributors" subtitle="Product-level contribution concentration" theme={theme}>
+            <ChartBlock title="Top Revenue Contributors" subtitle="Top products by revenue" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={productRevenue.slice(0, 10)}>
@@ -370,9 +370,9 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "inventory" || activeTab === "overview") && (
-        <AnalyticsSection title="Inventory and Stock Risk Analytics" subtitle="Coverage pressure, stockout proxy risk, and monetary exposure" theme={theme}>
+        <AnalyticsSection title="Inventory Risk" subtitle="Coverage, stockout risk, and potential loss" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartBlock title="Risk and Lost Revenue by Product" subtitle="High-risk list sorted for intervention" theme={theme}>
+            <ChartBlock title="Risk and Lost Revenue by Product" subtitle="Highest risk products" theme={theme}>
               <SortableRiskTable
                 rows={sortedRiskRows}
                 sortBy={sortBy}
@@ -382,7 +382,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               />
             </ChartBlock>
 
-            <ChartBlock title="Inventory Coverage vs Demand" subtitle="Category pressure matrix" theme={theme}>
+            <ChartBlock title="Inventory Coverage vs Demand" subtitle="Coverage and demand view" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart>
@@ -400,9 +400,9 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "demand" || activeTab === "overview") && (
-        <AnalyticsSection title="Demand Intelligence" subtitle="Demand pressure by time and interaction with pricing/inventory" theme={theme}>
+        <AnalyticsSection title="Demand Analytics" subtitle="Demand trend and demand impact" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartBlock title="Demand Trend (Hourly)" subtitle="Surge windows and demand slope" theme={theme}>
+            <ChartBlock title="Demand Trend (Hourly)" subtitle="Demand by hour" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={trendsByHour.slice(-36)}>
@@ -416,7 +416,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Demand vs Margin" subtitle="Are high-demand windows translating to margin quality?" theme={theme}>
+            <ChartBlock title="Demand vs Margin" subtitle="Demand and margin relationship" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart>
@@ -434,9 +434,9 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "operations" || activeTab === "overview") && (
-        <AnalyticsSection title="Operational and Delivery Analytics" subtitle="Delivery performance trends and relationship with business outcomes" theme={theme}>
+        <AnalyticsSection title="Operations" subtitle="Delivery trends and operational impact" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartBlock title="Delivery Minutes Trend" subtitle="Operational pressure over time" theme={theme}>
+            <ChartBlock title="Delivery Time Trend" subtitle="Average delivery time over time" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={trendsByDay}>
@@ -450,7 +450,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
               </div>
             </ChartBlock>
 
-            <ChartBlock title="Location Comparison" subtitle="Delivery vs risk profile by location" theme={theme}>
+            <ChartBlock title="Location Comparison" subtitle="Delivery and risk by location" theme={theme}>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={locationPerformance}>
@@ -471,11 +471,11 @@ export default function AnalyticsIntelligencePage({ theme }) {
       )}
 
       {(activeTab === "insights" || activeTab === "overview") && (
-        <AnalyticsSection title="Insights and Recommendations" subtitle="Automated findings for leadership, pricing, and operations stakeholders" theme={theme}>
+        <AnalyticsSection title="Insights and Recommendations" subtitle="Auto-generated findings and actions" theme={theme}>
           <div className="grid gap-4 lg:grid-cols-2">
             <InsightPanel insights={insights} summary={narrativeSummary} theme={theme} />
             <div className="space-y-4">
-              <ChartBlock title="Baseline vs Dynamic Comparison" subtitle="Contribution gap under current filters" theme={theme}>
+              <ChartBlock title="Baseline vs Dynamic" subtitle="Comparison under current filters" theme={theme}>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[
@@ -494,7 +494,7 @@ export default function AnalyticsIntelligencePage({ theme }) {
                 </div>
               </ChartBlock>
 
-              <ChartBlock title="Opportunity Heat" subtitle="Top 8 segments by revenue and margin quality" theme={theme}>
+              <ChartBlock title="Top Opportunities" subtitle="Top segments by revenue and margin" theme={theme}>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {categoryRevenue.slice(0, 8).map((entry) => (
                     <div key={entry.dimension} className={cx("rounded-xl border p-3", isDark ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-slate-50")}>
@@ -512,3 +512,4 @@ export default function AnalyticsIntelligencePage({ theme }) {
     </div>
   );
 }
+

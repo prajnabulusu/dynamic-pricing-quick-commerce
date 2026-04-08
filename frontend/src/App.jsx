@@ -23,7 +23,7 @@ function ThemeToggle({ theme, onToggle }) {
       onClick={onToggle}
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-all ${
         isDark
-          ? "border-white/15 bg-white/8 text-slate-100 hover:bg-white/12"
+          ? "border-slate-600/70 bg-slate-900/80 text-slate-100 hover:bg-slate-800/85"
           : "border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50"
       }`}
       aria-label="Toggle color theme"
@@ -51,7 +51,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    document.body.style.backgroundColor = theme === "dark" ? "#0f1115" : "#f4f2ea";
+    document.body.style.backgroundColor = theme === "dark" ? "#070b14" : "#f4f2ea";
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
@@ -77,7 +77,7 @@ export default function App() {
       }
       return [...prev, { product, quantity: 1 }];
     });
-    showToast(`${product.name} added to dispatch queue`);
+    showToast(`${product.name} added to cart`);
   };
 
   const removeFromCart = (productId) =>
@@ -91,17 +91,17 @@ export default function App() {
     <div
       className={`relative min-h-screen overflow-x-hidden transition-colors duration-300 ${
         isDark
-          ? "bg-[radial-gradient(circle_at_15%_10%,_rgba(245,158,11,0.16),_transparent_35%),radial-gradient(circle_at_80%_12%,_rgba(20,184,166,0.14),_transparent_40%),linear-gradient(180deg,_#111317_0%,_#161a22_45%,_#0d1015_100%)] text-slate-100"
+          ? "bg-[radial-gradient(circle_at_10%_0%,_rgba(14,165,233,0.18),_transparent_38%),radial-gradient(circle_at_88%_8%,_rgba(16,185,129,0.14),_transparent_42%),radial-gradient(circle_at_50%_100%,_rgba(245,158,11,0.12),_transparent_45%),linear-gradient(180deg,_#070b14_0%,_#0b1220_45%,_#060a12_100%)] text-slate-100"
           : "bg-[radial-gradient(circle_at_12%_8%,_rgba(217,119,6,0.14),_transparent_32%),radial-gradient(circle_at_85%_10%,_rgba(13,148,136,0.12),_transparent_38%),linear-gradient(180deg,_#f4f2ea_0%,_#efe8d8_40%,_#f8f4eb_100%)] text-stone-900"
       }`}
     >
-      <div className={`pointer-events-none absolute -left-16 top-24 h-52 w-52 rounded-full blur-3xl ${isDark ? "bg-amber-400/15" : "bg-amber-300/20"}`} />
-      <div className={`pointer-events-none absolute -right-20 top-44 h-64 w-64 rounded-full blur-3xl ${isDark ? "bg-teal-300/10" : "bg-teal-300/20"}`} />
-      <div className={`pointer-events-none absolute bottom-0 left-1/3 h-40 w-72 -translate-x-1/2 blur-3xl ${isDark ? "bg-cyan-300/8" : "bg-orange-200/20"}`} />
+      <div className={`pointer-events-none absolute -left-16 top-24 h-52 w-52 rounded-full blur-3xl ${isDark ? "bg-cyan-400/18" : "bg-amber-300/20"}`} />
+      <div className={`pointer-events-none absolute -right-20 top-44 h-64 w-64 rounded-full blur-3xl ${isDark ? "bg-emerald-300/12" : "bg-teal-300/20"}`} />
+      <div className={`pointer-events-none absolute bottom-0 left-1/3 h-40 w-72 -translate-x-1/2 blur-3xl ${isDark ? "bg-amber-300/10" : "bg-orange-200/20"}`} />
       <nav
         className={`sticky top-0 z-40 border-b backdrop-blur-xl ${
           isDark
-            ? "border-white/10 bg-zinc-950/65"
+            ? "border-slate-700/70 bg-slate-950/78 shadow-[0_10px_30px_rgba(2,8,23,0.45)]"
             : "border-stone-300/70 bg-[#f7f2e7]/80"
         }`}
       >
@@ -118,10 +118,10 @@ export default function App() {
             </div>
             <div>
               <p className={`text-lg font-semibold ${isDark ? "text-white" : "text-stone-900"}`}>
-                Warehouse Nexus
+                Retail Hub
               </p>
               <p className={`text-xs ${isDark ? "text-zinc-400" : "text-stone-600"}`}>
-                Unified warehouse operations workspace
+                Pricing and operations dashboard
               </p>
             </div>
             <span
@@ -131,7 +131,7 @@ export default function App() {
                   : "bg-teal-100 text-teal-800 ring-1 ring-teal-200"
               }`}
             >
-              Control Online
+              Live
             </span>
           </div>
 
@@ -153,7 +153,7 @@ export default function App() {
                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              Operations Floor
+              Shop
             </button>
             <button
               onClick={() => setPage("admin")}
@@ -167,7 +167,7 @@ export default function App() {
                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              Command Center
+              Dashboard
             </button>
             <button
               onClick={() => setPage("live_orders")}
@@ -195,7 +195,7 @@ export default function App() {
                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              BI Intelligence
+              Analytics
             </button>
 
             {page === "shop" && (
@@ -206,7 +206,7 @@ export default function App() {
                     ? "text-zinc-200 hover:bg-white/8"
                     : "text-stone-600 hover:bg-stone-100"
                 }`}
-                aria-label="Dispatch queue summary"
+                aria-label="Cart summary"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path
