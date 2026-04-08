@@ -11,7 +11,7 @@ export default function InsightPanel({ insights, summary, theme }) {
 
   return (
     <div className="space-y-3">
-      <div className={cx("rounded-2xl border px-4 py-3 text-sm", isDark ? "border-white/10 bg-white/[0.04] text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
+      <div className={cx("rounded-2xl border px-4 py-3 text-sm", isDark ? "border-slate-700/80 bg-slate-900/72 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
         {summary}
       </div>
       {insights.map((insight, index) => (
